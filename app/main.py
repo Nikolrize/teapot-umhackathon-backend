@@ -1,8 +1,24 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import router  # ← change "api.routes" to "app.api.routes"
+from starlette.middleware.sessions import SessionMiddleware
+from app.api.routes import router
+from app.api.auth_routes import router as auth_router
+from app.core.config import SECRET_KEY
+
+# Set this BEFORE app initialization
+os.environ['AUTHLIB_INSECURE_TRANSPORT'] = 'true'
 
 app = FastAPI()
+
+# ONLY ONE SessionMiddleware
+app.add_middleware(
+    SessionMiddleware, 
+    secret_key=SECRET_KEY, # Use your real secret key from config
+    session_cookie="fastapi_session",
+    same_site="lax",
+    https_only=False
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -12,8 +28,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
-
+# Only include the routers you need
 app.include_router(router)
+app.include_router(auth_router)
