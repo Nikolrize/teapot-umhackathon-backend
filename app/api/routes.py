@@ -3,8 +3,8 @@ from fastapi import APIRouter
 from app.models.schemas import AnalyzeRequest, LoginRequest, LoginResponse      
 from app.services.auth import authenticate_user
 from app.services.decision_service import generate_decision  
-from app.services.oauth_service import oauth
-from starlette.requests import Request 
+# from app.services.oauth_service import oauth
+# from starlette.requests import Request 
 
 router = APIRouter() 
 
