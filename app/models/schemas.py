@@ -7,6 +7,14 @@ class AnalyzeRequest(BaseModel):
     cost: float
     demand: int
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+
 
 class WorkspaceContext(BaseModel):
     name: str
