@@ -9,7 +9,7 @@ router = APIRouter(prefix="/auth")
 
 # 1. DYNAMIC BASE URL: 
 # Uses Render environment variable if available, otherwise defaults to local
-BASE_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip("/")
+BASE_URL = os.getenv("BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 
 @router.get("/github/login")
 async def github_login(request: Request):
