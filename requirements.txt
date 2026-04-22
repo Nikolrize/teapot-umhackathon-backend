@@ -3,3 +3,6 @@ uvicorn
 python-dotenv
 pydantic
 requests
+itsdangerous
+authlib
+httpx

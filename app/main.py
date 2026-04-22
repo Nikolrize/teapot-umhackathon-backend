@@ -17,7 +17,7 @@ app.add_middleware(
     secret_key=SECRET_KEY, # Use your real secret key from config
     session_cookie="fastapi_session",
     same_site="lax",
-    https_only=False
+    https_only=True
 )
 
 app.add_middleware(
