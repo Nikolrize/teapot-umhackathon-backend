@@ -6,3 +6,5 @@ requests
 itsdangerous
 authlib
 httpx
+passlib[bcrypt]
+psycopg2-binary
