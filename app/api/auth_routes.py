@@ -1,8 +1,11 @@
 import os
 import re
 import bcrypt
-import psycopg2
-from fastapi import APIRouter, HTTPException, status
+import psycopg2.extras
+# from . import auth_utils
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
 from starlette.requests import Request
 from app.services.oauth_service import oauth
 from pydantic import BaseModel, EmailStr, field_validator
@@ -10,6 +13,7 @@ from fastapi.responses import RedirectResponse, HTMLResponse
 from authlib.integrations.base_client.errors import MismatchingStateError
 from pydantic import BaseModel, EmailStr, Field
 from app.db_connection import get_db_connection
+from .auth_utils import create_access_token
 
 router = APIRouter(prefix="/auth")
 
@@ -95,23 +99,36 @@ def hash_password(password: str):
     hashed = bcrypt.hashpw(pwd_bytes, salt)
     return hashed.decode('utf-8') # Store as string in DB
 
-def verify_password(plain_password, hashed_password):
-    password_byte_enc = plain_password.encode('utf-8')
-    hashed_password_byte_enc = hashed_password.encode('utf-8')
-    return bcrypt.checkpw(password_byte_enc, hashed_password_byte_enc)
-
-
+def verify_password(plain_password: str, hashed_password: str):
+    if not hashed_password:
+        return False
+    return bcrypt.checkpw(
+        plain_password.encode('utf-8'), 
+        hashed_password.encode('utf-8')
+    )
 
 class SignupRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=50)    
     confirm_password: str
-    role: str = "Client"
+    invite_code: str = None
+    
+    @field_validator('username')
+    @classmethod
+    def username_rules(cls, v: str) -> str:
+        # 1. Custom length catch
+        if len(v) < 3:
+            raise ValueError('Username is too short! It must be at least 3 characters.')
+        
 
     @field_validator('password')
     @classmethod
     def password_complexity(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError('Password is too short! It must be at least 8 characters long')
+        if len(v) > 50:
+            raise ValueError('Password is too long! It must be less then 50 charcters long')
         if not any(char.isupper() for char in v):
             raise ValueError('Password must contain at least one uppercase letter')
         if not any(char.isdigit() for char in v):
@@ -128,33 +145,58 @@ class SignupRequest(BaseModel):
 async def signup(user: SignupRequest):
     hashed_pwd = hash_password(user.password)
     conn = None
+    cur = None
     
+    ADMIN_SECRET_CODE = os.getenv("ADMIN_SIGNUP_CODE")
+
     try:
         conn = get_db_connection()
         cur = conn.cursor()
+
+        
+        if user.invite_code == ADMIN_SECRET_CODE:
+            assigned_role = "Admin"
+        else:
+            assigned_role = "Client"
+        
+
+        cur.execute("SELECT username FROM users WHERE username = %s", (user.username,))
+        if cur.fetchone():
+            cur.close()
+            raise HTTPException(status_code=400, detail="username already registered, Please Try Another Username")
 
         # 1. Check if user exists
         cur.execute("SELECT email FROM users WHERE email = %s", (user.email,))
         if cur.fetchone():
             cur.close()
-            raise HTTPException(status_code=400, detail="Email already registered")
+            raise HTTPException(status_code=400, detail="Email already registered, Please Try Another Email")
 
         # 2. Insert (Trigger handles the ID)
         query = """
             INSERT INTO users (username, email, password, role)
             VALUES (%s, %s, %s, %s)
-            RETURNING id, username, role;
+            RETURNING user_id, username, role;
         """
-        cur.execute(query, (user.username, user.email, hashed_pwd, user.role))
+        cur.execute(query, (user.username, user.email, hashed_pwd, assigned_role))
         new_user = cur.fetchone()
-        
+
+        if not new_user:
+            # Rollback if we didn't get a user back for some reason
+            conn.rollback()
+            raise HTTPException(
+                status_code=500, 
+                detail="Database error: User creation failed to return data."
+            ) 
         conn.commit()
-        cur.close()
+        
 
         return {
             "status": "success",
             "user": {"id": new_user[0], "username": new_user[1], "role": new_user[2]}
         }
+    except HTTPException:
+        # Re-raise planned HTTP errors
+        raise
 
     except Exception as e:
         if conn: conn.rollback()
@@ -162,4 +204,77 @@ async def signup(user: SignupRequest):
         # Return the actual error to help you debug
         raise HTTPException(status_code=500, detail=str(e))
     finally:
+        if cur: cur.close()
         if conn: conn.close()
+# ----------------------------------login-------------------------------
+
+@router.post("/login")
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    # 1. Catch Null/Empty inputs immediately before hitting the DB
+    if not form_data.username or not form_data.password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username/Email and password are required"
+        )
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+        # Secure parameterized query
+        query = "SELECT username, password, role FROM users WHERE username = %s OR email = %s;"
+        cur.execute(query, (form_data.username, form_data.username))
+        
+        # 2. Catch multiple results (Safety check)
+        results = cur.fetchall()
+        
+        if not results:
+            # Generic 401 for security (don't tell them if the user doesn't exist)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # If somehow the DB has duplicates, we take the first one 
+        user_record = results[0]
+
+        # 3. Verify password 
+        try:
+            is_valid = verify_password(form_data.password, user_record['password'])
+        except Exception as e:
+            print(f"Bcrypt Verification Error: {e}")
+            is_valid = False
+
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        access_token = create_access_token(
+            data={"sub": user_record['username'], "role": user_record['role']}
+        )
+
+        return {
+            "status": "success",
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {
+                "username": user_record['username'],
+                "role": user_record['role']
+            }
+        }
+    except HTTPException:
+            # Re-raise HTTPExceptions so FastAPI handles them (like the 401/400 above)
+        raise
+    except Exception as e:
+        print(f"Login Error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        if conn:
+            if 'cur' in locals() and cur: # Check if cursor was actually created
+                cur.close()
+            conn.close()
