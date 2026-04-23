@@ -2,8 +2,7 @@ from app.services.glm_service import call_glm
 
 def run(data):
     context = {
-        "agent": "Profit Optimiser",
-        "task": "Suggest actionable ways to increase profit margins.",
+        "task": "Suggest actionable ways to increase profit margins and reduce unnecessary costs.",
         "business": data.dict(),
     }
-    return call_glm(1024, "you are a professional business analyst who have been working in the industry for over 10 years.",context, 1, 0.5,)
+    return call_glm(4096, "You are a financial advisor with over 10 years of experience improving profit margins and eliminating cost inefficiencies for businesses.", context, 1, 0.5)

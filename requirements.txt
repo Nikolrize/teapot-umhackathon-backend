@@ -8,3 +8,4 @@ authlib
 httpx
 passlib[bcrypt]
 psycopg2-binary
+mcp

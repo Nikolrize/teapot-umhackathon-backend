@@ -9,11 +9,9 @@ client = Anthropic(
 
 def call_glm(max_tokens, requirements, context, temperature, top_p, prev_messages=None, previous_output=None, reference: list = None):
     if isinstance(context, dict):
-        agent = context.get("agent", "Business Analyst")
         task = context.get("task", "")
         business = context.get("business", {})
         context_str = (
-            f"You are acting as the {agent}.\n"
             f"Task: {task}\n\n"
             f"Business Profile:\n"
             f"- Name: {business.get('name')}\n"
@@ -53,5 +51,18 @@ def call_glm(max_tokens, requirements, context, temperature, top_p, prev_message
             top_p=top_p,
         )
 
+    return response.content[0].text
+
+
+def call_glm_session(max_tokens, requirements, messages: list, temperature, top_p):
+    """Multi-turn version: accepts a full messages list built from session history."""
+    response = client.messages.create(
+        model="ilmu-glm-5.1",
+        max_tokens=max_tokens,
+        system=requirements,
+        messages=messages,
+        temperature=temperature,
+        top_p=top_p,
+    )
     return response.content[0].text
 
