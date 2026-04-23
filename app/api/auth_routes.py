@@ -110,10 +110,22 @@ class SignupRequest(BaseModel):
     password: str = Field(..., min_length=8, max_length=50)    
     confirm_password: str
     invite_code: str = None
+    
+    @field_validator('username')
+    @classmethod
+    def username_rules(cls, v: str) -> str:
+        # 1. Custom length catch
+        if len(v) < 3:
+            raise ValueError('Username is too short! It must be at least 3 characters.')
+        
 
     @field_validator('password')
     @classmethod
     def password_complexity(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError('Password is too short! It must be at least 8 characters long')
+        if len(v) > 50:
+            raise ValueError('Password is too long! It must be less then 50 charcters long')
         if not any(char.isupper() for char in v):
             raise ValueError('Password must contain at least one uppercase letter')
         if not any(char.isdigit() for char in v):
@@ -145,11 +157,16 @@ async def signup(user: SignupRequest):
             assigned_role = "Client"
         
 
+        cur.execute("SELECT username FROM users WHERE username = %s", (user.username,))
+        if cur.fetchone():
+            cur.close()
+            raise HTTPException(status_code=400, detail="username already registered, Please Try Another Username")
+
         # 1. Check if user exists
         cur.execute("SELECT email FROM users WHERE email = %s", (user.email,))
         if cur.fetchone():
             cur.close()
-            raise HTTPException(status_code=400, detail="Email already registered")
+            raise HTTPException(status_code=400, detail="Email already registered, Please Try Another Email")
 
         # 2. Insert (Trigger handles the ID)
         query = """
