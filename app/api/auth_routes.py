@@ -210,7 +210,6 @@ async def signup(user: SignupRequest):
 
 @router.post("/login")
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    # 1. Catch Null/Empty inputs immediately before hitting the DB
     if not form_data.username or not form_data.password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -222,25 +221,30 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-        # Secure parameterized query
-        query = "SELECT username, password, role FROM users WHERE username = %s OR email = %s;"
+        # 1. Update the query to include is_inactive
+        query = "SELECT username, password, role, is_inactive FROM users WHERE username = %s OR email = %s;"
         cur.execute(query, (form_data.username, form_data.username))
         
-        # 2. Catch multiple results (Safety check)
         results = cur.fetchall()
         
+        # 2. Check if user exists AND if they are inactive
         if not results:
-            # Generic 401 for security (don't tell them if the user doesn't exist)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
-        # If somehow the DB has duplicates, we take the first one 
         user_record = results[0]
 
-        # 3. Verify password 
+        if user_record['is_inactive']:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # 4. Verify password (rest of your logic remains the same)
         try:
             is_valid = verify_password(form_data.password, user_record['password'])
         except Exception as e:
@@ -268,13 +272,12 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             }
         }
     except HTTPException:
-            # Re-raise HTTPExceptions so FastAPI handles them (like the 401/400 above)
         raise
     except Exception as e:
         print(f"Login Error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         if conn:
-            if 'cur' in locals() and cur: # Check if cursor was actually created
+            if 'cur' in locals() and cur:
                 cur.close()
             conn.close()
