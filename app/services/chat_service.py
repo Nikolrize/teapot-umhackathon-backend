@@ -1,8 +1,10 @@
-from sqlalchemy.orm import Session 
+from sqlalchemy.orm import Session, aliased 
 from sqlalchemy import select, func, and_, or_
 from datetime import datetime, timezone
 from app.models.chat import User, Conversation, Message, ReadReceipt
+from fastapi import HTTPException
 
+# Get or create user
 def get_or_create_user(db: Session, username: str) -> User:
     user = db.query(User).filter(User.username == username).first()
     if not user:
@@ -12,23 +14,26 @@ def get_or_create_user(db: Session, username: str) -> User:
         db.refresh(user)
     return user
 
-def search_users(db: Session, query: str, exclude_id: int) -> list[User]:
+# Search user by name
+def search_users(db: Session, query: str, username: str) -> list[User]:
     return (
         db.query(User)
-        .filter(User.username.ilike(f"%{query}%"), User.id != exclude_id)
+        .filter(User.username.ilike(f"%{query}%"), User.username != username)
         .limit(10)
         .all()
     )
 
-def set_user_status(db: Session, user_id: int, status: str):
-    user = db.query(User).filter(User.id == user_id).first()
+# Set user status
+def set_user_status(db: Session, username: str, status: str):
+    user = db.query(User).filter(User.username == username).first()
     if user:
         user.status       = status
         user.last_seen_at = datetime.now(timezone.utc)
         db.commit()
 
-def get_or_create_conversation(db: Session, user_id_1: int, user_id_2: int) -> Conversation:
-    a, b = (user_id_1, user_id_2) if user_id_1 < user_id_2 else (user_id_2, user_id_1)
+# IDs are stored in database
+def get_or_create_conversation(db: Session, user_a_id: str, user_b_id: str) -> Conversation:
+    a, b = (user_a_id, user_b_id) if user_a_id < user_b_id else (user_b_id, user_a_id)
     conv = db.query(Conversation).filter(
         Conversation.user_a_id == a,
         Conversation.user_b_id == b
@@ -38,42 +43,69 @@ def get_or_create_conversation(db: Session, user_id_1: int, user_id_2: int) -> C
         conv = Conversation(user_a_id=a, user_b_id=b)
         db.add(conv)
         db.flush()
-        db.add(ReadReceipt(conversation_id=conv.id, user_id=user_id_1))
-        db.add(ReadReceipt(conversation_id=conv.id, user_id=user_id_2))
+        db.add(ReadReceipt(conver_id=conv.conver_id, user_id=user_a_id))
+        db.add(ReadReceipt(conver_id=conv.conver_id, user_id=user_b_id))
         db.commit()
         db.refresh(conv)
     return conv
 
-def get_conversations(db: Session, user_id: int) -> list[dict]:
-    conversations = (
+# List conversations of current user
+def get_conversations(db: Session, user_id: str, search_query: str = None) -> list[dict]:
+    user = db.query(User).filter(User.user_id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Create aliases for the User table to represent the two sides of the conversation
+    UserA = aliased(User)
+    UserB = aliased(User)
+
+    # Start the query
+    query = (
         db.query(Conversation)
+        .join(UserA, Conversation.user_a_id == UserA.user_id)
+        .join(UserB, Conversation.user_b_id == UserB.user_id)
         .filter(or_(
-            Conversation.user_a_id == user_id,
-            Conversation.user_b_id == user_id
+            Conversation.user_a_id == user.user_id,
+            Conversation.user_b_id == user.user_id
         ))
-        .all()
     )
+
+    # 2. Apply search filter if a query is provided
+    if search_query:
+        search_filter = f"%{search_query}%"
+        query = query.filter(
+            or_(
+                # If current user is A, search for username of B
+                and_(Conversation.user_a_id == user.user_id, UserB.username.ilike(search_filter)),
+                # If current user is B, search for username of A
+                and_(Conversation.user_b_id == user.user_id, UserA.username.ilike(search_filter))
+            )
+        )
+
+    conversations = query.all()
 
     output = []
     for conv in conversations:
-        other    = conv.user_b if conv.user_a_id == user_id else conv.user_a
+        other = conv.user_b if conv.user_a_id == user.user_id else conv.user_a
+
         last_msg = (
             db.query(Message)
-            .filter(Message.conversation_id == conv.id)
+            .filter(Message.conver_id == conv.conver_id)
             .order_by(Message.created_at.desc())
             .first()
         )
+
         rr = db.query(ReadReceipt).filter(
-            ReadReceipt.conversation_id == conv.id,
-            ReadReceipt.user_id == user_id
+            ReadReceipt.conver_id == conv.conver_id,
+            ReadReceipt.user_id == user.user_id
         ).first()
         last_read = rr.last_read_at if rr else datetime.min.replace(tzinfo=timezone.utc)
 
         unread_count = (
             db.query(func.count(Message.id))
             .filter(
-                Message.conversation_id == conv.id,
-                Message.sender_id != user_id,
+                Message.conver_id == conv.conver_id, 
+                Message.sender_id != user.user_id,
                 Message.created_at > last_read,
                 Message.is_deleted == False
             )
@@ -81,14 +113,17 @@ def get_conversations(db: Session, user_id: int) -> list[dict]:
         )
 
         output.append({
-            "id":              conv.id,
+            "id":              conv.conver_id,
             "other_user":      other,
             "last_message":    last_msg.content if last_msg and not last_msg.is_deleted else None,
             "last_message_at": last_msg.created_at if last_msg else None,
             "unread_count":    unread_count,
         })
 
-    output.sort(key=lambda x: x["last_message_at"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    output.sort(
+        key=lambda x: x["last_message_at"] or datetime.min.replace(tzinfo=timezone.utc),
+        reverse=True
+    )
     return output
 
 def get_messages(db: Session, conversation_id: int, limit: int = 50, before_id: int = None) -> list[Message]:
