@@ -9,6 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional
 from app.api.auth_routes import hash_password
+
 # from app.models.schemas import UserUpdate, MessageUpdate
 
 router = APIRouter(prefix="/api", tags=["CRUD Operations"])
@@ -49,24 +50,22 @@ class UserUpdate(BaseModel):
         return v
     
 @router.patch("/user/update/{search_term}")
-def update_user_profile(
-    search_term: str, 
-    update_data: UserUpdate, 
-    db: Session = Depends(get_db)
-):
-    # 1. Search by ID, username, or email
+def update_user_profile(search_term: str, update_data: UserUpdate, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(
-        or_(
-            User.user_id == search_term,
-            User.username == search_term,
-            User.email == search_term
-        )
+        or_(User.user_id == search_term, User.username == search_term, User.email == search_term)
     ).first()
     
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    # 2. Map only the fields that were provided in the request  
+
+    # NEW: Catch OAuth users who haven't set a password yet
+    if db_user.password is None:
+        raise HTTPException(
+            status_code=403, 
+            detail="To edit your profile, you must first set a local password for your account."
+        )
+
+    # Proceed with updates if they have a password
     if update_data.username:
         db_user.username = update_data.username
     if update_data.email:
@@ -90,9 +89,36 @@ def update_user_profile(
     return {"ok": True, "user": db_user}
 
 
+class SetInitialPassword(BaseModel):
+    new_password: str = Field(..., min_length=8)
+
+@router.post("/user/set-initial-password/{user_id}")
+def set_initial_password(user_id: str, data: SetInitialPassword, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.user_id == user_id).first()
+
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Safety Check: If they already have a password, they should use the "Change Password" flow
+    if db_user.password is not None:
+        raise HTTPException(
+            status_code=400, 
+            detail="Password already exists!"
+        )
+    try:
+        # Hash and Save
+        db_user.password = hash_password(data.new_password)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to set password")
+
+    return {"ok": True, "message": "Password created!"}
+
+
 @router.delete("/user/delete/{search_term}")
 def delete_user(search_term: str, db: Session = Depends(get_db)):
-    # 1. Search for the target user
+    # 1. Search for the target user (active or already inactive)
     db_user = db.query(User).filter(
         or_(
             User.user_id == search_term,
@@ -103,19 +129,21 @@ def delete_user(search_term: str, db: Session = Depends(get_db)):
     
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # 2. Check if they are already deleted to avoid redundant commits
+    if db_user.is_inactive == True:
+        return {"ok": True, "message": "User is already deactivated."}
     
-    # 2. Attempt the delete
+    # 3. Perform Soft Delete
     try:
-        db.delete(db_user)
+        db_user.is_inactive = True
         db.commit()
     except SQLAlchemyError as e:
         db.rollback()
-        # This usually happens if the user has messages or conversations 
-        # that aren't set to "CASCADE DELETE"
+        print(f"Delete Error: {e}")
         raise HTTPException(
-            status_code=400, 
-            detail="Cannot delete user. They may have active messages or conversations linked to them."
+            status_code=500, 
+            detail="Failed to deactivate user account."
         )
         
-    return {"ok": True, "message": f"User {search_term} successfully purged."}
-
+    return {"ok": True, "message": f"User {search_term} has been deactivated."}
