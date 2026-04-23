@@ -109,7 +109,7 @@ class SignupRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=50)    
     confirm_password: str
-    role: str = "Client"
+    invite_code: str = None
 
     @field_validator('password')
     @classmethod
@@ -130,10 +130,20 @@ class SignupRequest(BaseModel):
 async def signup(user: SignupRequest):
     hashed_pwd = hash_password(user.password)
     conn = None
+    cur = None
     
+    ADMIN_SECRET_CODE = os.getenv("ADMIN_SIGNUP_CODE")
+
     try:
         conn = get_db_connection()
         cur = conn.cursor()
+
+        
+        if user.invite_code == ADMIN_SECRET_CODE:
+            assigned_role = "Admin"
+        else:
+            assigned_role = "Client"
+        
 
         # 1. Check if user exists
         cur.execute("SELECT email FROM users WHERE email = %s", (user.email,))
@@ -147,8 +157,9 @@ async def signup(user: SignupRequest):
             VALUES (%s, %s, %s, %s)
             RETURNING user_id, username, role;
         """
-        cur.execute(query, (user.username, user.email, hashed_pwd, user.role))
+        cur.execute(query, (user.username, user.email, hashed_pwd, assigned_role))
         new_user = cur.fetchone()
+
         if not new_user:
             # Rollback if we didn't get a user back for some reason
             conn.rollback()
@@ -173,10 +184,8 @@ async def signup(user: SignupRequest):
         # Return the actual error to help you debug
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        if conn: 
-            conn.close()
-            cur.close()
-
+        if cur: cur.close()
+        if conn: conn.close()
 # ----------------------------------login-------------------------------
 
 @router.post("/login")
