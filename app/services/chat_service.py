@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func, and_, or_
 from datetime import datetime, timezone
 from app.models.chat import User, Conversation, Message, ReadReceipt
+from sqlalchemy import or_
 
 def get_or_create_user(db: Session, username: str) -> User:
     user = db.query(User).filter(User.username == username).first()
@@ -12,22 +13,36 @@ def get_or_create_user(db: Session, username: str) -> User:
         db.refresh(user)
     return user
 
-def search_users(db: Session, query: str, exclude_id: int) -> list[User]:
+def search_users(db: Session, query: str, exclude_id: str) -> list[User]:
+    if not query.strip():
+        return []
+    
     return (
-        db.query(User)
-        .filter(User.username.ilike(f"%{query}%"), User.id != exclude_id)
+            db.query(User)
+            .filter(
+                or_(
+                    User.username.ilike(f"%{query}%"),
+                    User.email.ilike(f"%{query}%")
+                ),
+                User.user_id != exclude_id
+            )
         .limit(10)
         .all()
     )
 
-def set_user_status(db: Session, user_id: int, status: str):
-    user = db.query(User).filter(User.id == user_id).first()
+def set_user_status(db: Session, user_id: str, status: str):
+    user = db.query(User).filter(User.user_id == user_id).first()
     if user:
         user.status       = status
         user.last_seen_at = datetime.now(timezone.utc)
+    try:
         db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Read Receipt Error: {e}")
+        raise e
 
-def get_or_create_conversation(db: Session, user_id_1: int, user_id_2: int) -> Conversation:
+def get_or_create_conversation(db: Session, user_id_1: str, user_id_2: str) -> Conversation:
     a, b = (user_id_1, user_id_2) if user_id_1 < user_id_2 else (user_id_2, user_id_1)
     conv = db.query(Conversation).filter(
         Conversation.user_a_id == a,
@@ -44,7 +59,7 @@ def get_or_create_conversation(db: Session, user_id_1: int, user_id_2: int) -> C
         db.refresh(conv)
     return conv
 
-def get_conversations(db: Session, user_id: int) -> list[dict]:
+def get_conversations(db: Session, user_id: str) -> list[dict]:
     conversations = (
         db.query(Conversation)
         .filter(or_(
@@ -114,9 +129,9 @@ def save_message(db: Session, conversation_id: int, sender: User, content: str, 
     db.refresh(msg)
     return msg
 
-def delete_message(db: Session, message_id: int, user_id: int) -> bool:
+def delete_message(db: Session, message_id: int, user_id: str) -> bool:
     msg = db.query(Message).filter(
-        Message.id == message_id,
+        Message.message_id == message_id,
         Message.sender_id == user_id
     ).first()
     if not msg:
@@ -125,13 +140,18 @@ def delete_message(db: Session, message_id: int, user_id: int) -> bool:
     db.commit()
     return True
 
-def mark_as_read(db: Session, conversation_id: int, user_id: int):
+def mark_as_read(db: Session, conversation_id: int, user_id: str):
     rr = db.query(ReadReceipt).filter(
-        ReadReceipt.conversation_id == conversation_id,
+        ReadReceipt.conver_id == conversation_id,
         ReadReceipt.user_id == user_id
     ).first()
     if rr:
         rr.last_read_at = datetime.now(timezone.utc)
     else:
-        db.add(ReadReceipt(conversation_id=conversation_id, user_id=user_id))
-    db.commit()
+        db.add(ReadReceipt(conver_id=conversation_id, user_id=user_id))
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Read Receipt Error: {e}")
+        raise e
