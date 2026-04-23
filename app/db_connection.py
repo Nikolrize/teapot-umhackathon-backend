@@ -27,8 +27,11 @@ SessionLocal = sessionmaker(
     autoflush=False
 )
 
+<<<<<<< HEAD
 
 # For chat features
+=======
+>>>>>>> a3251f4bb394e063d1bcee5efcd60aef72c74c42
 class Base(DeclarativeBase):
     pass
 

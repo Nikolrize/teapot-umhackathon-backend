@@ -2,7 +2,11 @@ from sqlalchemy.orm import Session, aliased
 from sqlalchemy import select, func, and_, or_
 from datetime import datetime, timezone
 from app.models.chat import User, Conversation, Message, ReadReceipt
+<<<<<<< HEAD
 from fastapi import HTTPException
+=======
+from sqlalchemy import or_
+>>>>>>> a3251f4bb394e063d1bcee5efcd60aef72c74c42
 
 # Get or create user
 def get_or_create_user(db: Session, username: str) -> User:
@@ -14,22 +18,48 @@ def get_or_create_user(db: Session, username: str) -> User:
         db.refresh(user)
     return user
 
+<<<<<<< HEAD
 # Search user by name
 def search_users(db: Session, query: str, username: str) -> list[User]:
     return (
         db.query(User)
         .filter(User.username.ilike(f"%{query}%"), User.username != username)
+=======
+def search_users(db: Session, query: str, exclude_id: str) -> list[User]:
+    if not query.strip():
+        return []
+    
+    return (
+            db.query(User)
+            .filter(
+                or_(
+                    User.username.ilike(f"%{query}%"),
+                    User.email.ilike(f"%{query}%")
+                ),
+                User.user_id != exclude_id
+            )
+>>>>>>> a3251f4bb394e063d1bcee5efcd60aef72c74c42
         .limit(10)
         .all()
     )
 
+<<<<<<< HEAD
 # Set user status
 def set_user_status(db: Session, username: str, status: str):
     user = db.query(User).filter(User.username == username).first()
+=======
+def set_user_status(db: Session, user_id: str, status: str):
+    user = db.query(User).filter(User.user_id == user_id).first()
+>>>>>>> a3251f4bb394e063d1bcee5efcd60aef72c74c42
     if user:
         user.status       = status
         user.last_seen_at = datetime.now(timezone.utc)
+    try:
         db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Read Receipt Error: {e}")
+        raise e
 
 # IDs are stored in database
 def get_or_create_conversation(db: Session, user_a_id: str, user_b_id: str) -> Conversation:
@@ -49,6 +79,7 @@ def get_or_create_conversation(db: Session, user_a_id: str, user_b_id: str) -> C
         db.refresh(conv)
     return conv
 
+<<<<<<< HEAD
 # List conversations of current user
 def get_conversations(db: Session, user_id: str, search_query: str = None) -> list[dict]:
     user = db.query(User).filter(User.user_id == user_id).first()
@@ -61,6 +92,10 @@ def get_conversations(db: Session, user_id: str, search_query: str = None) -> li
 
     # Start the query
     query = (
+=======
+def get_conversations(db: Session, user_id: str) -> list[dict]:
+    conversations = (
+>>>>>>> a3251f4bb394e063d1bcee5efcd60aef72c74c42
         db.query(Conversation)
         .join(UserA, Conversation.user_a_id == UserA.user_id)
         .join(UserB, Conversation.user_b_id == UserB.user_id)
@@ -149,9 +184,9 @@ def save_message(db: Session, conversation_id: int, sender: User, content: str, 
     db.refresh(msg)
     return msg
 
-def delete_message(db: Session, message_id: int, user_id: int) -> bool:
+def delete_message(db: Session, message_id: int, user_id: str) -> bool:
     msg = db.query(Message).filter(
-        Message.id == message_id,
+        Message.message_id == message_id,
         Message.sender_id == user_id
     ).first()
     if not msg:
@@ -160,13 +195,18 @@ def delete_message(db: Session, message_id: int, user_id: int) -> bool:
     db.commit()
     return True
 
-def mark_as_read(db: Session, conversation_id: int, user_id: int):
+def mark_as_read(db: Session, conversation_id: int, user_id: str):
     rr = db.query(ReadReceipt).filter(
-        ReadReceipt.conversation_id == conversation_id,
+        ReadReceipt.conver_id == conversation_id,
         ReadReceipt.user_id == user_id
     ).first()
     if rr:
         rr.last_read_at = datetime.now(timezone.utc)
     else:
-        db.add(ReadReceipt(conversation_id=conversation_id, user_id=user_id))
-    db.commit()
+        db.add(ReadReceipt(conver_id=conversation_id, user_id=user_id))
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Read Receipt Error: {e}")
+        raise e

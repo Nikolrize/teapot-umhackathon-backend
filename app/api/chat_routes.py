@@ -26,6 +26,7 @@ class ConversationOut(BaseModel):
 
 # Search user
 @router.get("/users/search")
+<<<<<<< HEAD
 def search_users(other_user: str, my_name: str, db: Session = Depends(get_db)):
     return svc.search_users(db, other_user, my_name)
 
@@ -46,6 +47,21 @@ def list_conversations(username: str,
 #         raise HTTPException(status_code=400, detail="Cannot start a conversation with yourself")
 #     conv = svc.get_or_create_conversation(db, username, target_username)
 #     return {"conversation_id": conv.conver_id}
+=======
+def search_users(q: str, me: str, db: Session = Depends(get_db)): 
+    return svc.search_users(db, q, exclude_id=me)
+
+@router.get("/conversations")
+def list_conversations(user_id: str, db: Session = Depends(get_db)):
+    return svc.get_conversations(db, user_id)
+
+# @router.post("/conversations")
+# def open_conversation(user_id: str, target_id: int, db: Session = Depends(get_db)):
+#     if user_id == target_id:
+#         raise HTTPException(status_code=400, detail="Cannot start a conversation with yourself")
+#     conv = svc.get_or_create_conversation(db, user_id, target_id)
+#     return {"conversation_id": conv.id}
+>>>>>>> a3251f4bb394e063d1bcee5efcd60aef72c74c42
 
 # @router.get("/conversations/{conversation_id}/messages")
 # def get_messages(
@@ -70,6 +86,7 @@ def list_conversations(username: str,
 #         for m in messages
 #     ]
 
+<<<<<<< HEAD
 # @router.delete("/messages/{message_id}")
 # def delete_message(message_id: int, user_id: str, db: Session = Depends(get_db)):
 #     success = svc.delete_message(db, message_id, user_id)
@@ -88,6 +105,26 @@ def list_conversations(username: str,
 #     user = svc.get_or_create_user(db, str(user_id))
 #     await chat_manager.connect(websocket, user_id)
 #     svc.set_user_status(db, user_id, "online")
+=======
+@router.delete("/messages/{message_id}")
+def delete_message(message_id: int, user_id: str, db: Session = Depends(get_db)):
+    success = svc.delete_message(db, message_id, user_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Message not found or not yours")
+    return {"ok": True}
+
+@router.post("/conversations/{conversation_id}/read")
+def mark_read(conversation_id: int, user_id: str, db: Session = Depends(get_db)):
+    svc.mark_as_read(db, conversation_id, user_id)
+    return {"ok": True}
+
+# WebSocket stays async — it must be
+@router.websocket("/ws/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: str, db: Session = Depends(get_db)):
+    user = svc.get_or_create_user(db, str(user_id))
+    await chat_manager.connect(websocket, user_id)
+    svc.set_user_status(db, user_id, "online")
+>>>>>>> a3251f4bb394e063d1bcee5efcd60aef72c74c42
 
 #     try:
 #         while True:
@@ -99,6 +136,7 @@ def list_conversations(username: str,
 #                 content     = data["content"]
 #                 reply_to_id = data.get("reply_to_id")
 
+<<<<<<< HEAD
 #                 saved = svc.save_message(db, conv_id, user, content, reply_to_id)
 #                 conv  = db.query(Conversation).filter(Conversation.id == conv_id).first()
 
@@ -112,6 +150,21 @@ def list_conversations(username: str,
 #                     "content":         content,
 #                     "created_at":      saved.created_at.isoformat(),
 #                 }
+=======
+                saved = svc.save_message(db, conv_id, user, content, reply_to_id)
+                conv  = db.query(Conversation).filter(Conversation.conver_id == conv_id).first()
+
+                payload = {
+                    "type":            "new_message",
+                    "id":              saved.message_id,
+                    "conversation_id": conv_id,
+                    "sender_id":       user_id,
+                    "sender_username": user.username,
+                    "reply_to_id":     reply_to_id,
+                    "content":         content,
+                    "created_at":      saved.created_at.isoformat(),
+                }
+>>>>>>> a3251f4bb394e063d1bcee5efcd60aef72c74c42
 
 #                 await chat_manager.send_to_user(user_id, payload)
 
