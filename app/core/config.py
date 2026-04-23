@@ -3,6 +3,7 @@ from starlette.config import Config
 
 config = Config(".env")
 
+DATABASE_URL = config("DATABASE_URL")
 GITHUB_CLIENT_ID = config("GITHUB_CLIENT_ID")
 GITHUB_CLIENT_SECRET = config("GITHUB_CLIENT_SECRET")
 GOOGLE_CLIENT_ID = config("GOOGLE_CLIENT_ID")
