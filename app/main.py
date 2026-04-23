@@ -13,6 +13,9 @@ from app.core.config import SECRET_KEY
 from app.services.agent_service import init_agents_table
 from app.services.project_service import init_project_tables
 from app.services.reference_service import init_reference_table
+from app.api.chat_routes import router as chat_router
+from app.core.config import SECRET_KEY
+from app.api.crud_routes import router as crud_routes
 
 os.environ['AUTHLIB_INSECURE_TRANSPORT'] = 'true'
 
@@ -48,3 +51,5 @@ app.include_router(agent_router, prefix="/client-dashboard")
 app.include_router(project_router, prefix="/client-dashboard")
 app.include_router(reference_router, prefix="/client-dashboard")
 app.include_router(admin_router, prefix="/admin-dashboard")
+app.include_router(crud_routes)
+app.include_router(chat_router)

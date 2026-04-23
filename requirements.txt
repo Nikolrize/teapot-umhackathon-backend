@@ -9,3 +9,6 @@ httpx
 passlib[bcrypt]
 psycopg2-binary
 mcp
+sqlalchemy
+python-multipart
+python-jose[cryptography]

@@ -1,5 +1,6 @@
 # teapot-umhackathon-backend
-first pip install -r requirements.txt
+first: pip install -r requirements.txt
+next:  fastapi dev app/main.py
 
 #to use mcp
 cd um-backend
