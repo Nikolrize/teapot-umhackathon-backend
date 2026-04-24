@@ -35,8 +35,8 @@ def search_users(other_user_name: str, current_user_id: str, db: Session = Depen
 
 # List all conversations of current user
 @router.get("/conversations", response_model=list[ConversationOut])
-def list_conversations(current_username: str, db: Session = Depends(get_db)):
-    return svc.get_conversations(db, current_username)
+def list_conversations(current_user_id: str, db: Session = Depends(get_db)):
+    return svc.get_conversations(db, current_user_id)
 
 
 # Open or retrieve conversation

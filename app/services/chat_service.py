@@ -80,10 +80,10 @@ UserA = aliased(User, name="user_a")
 UserB = aliased(User, name="user_b")
 
 # Get Conversations
-def get_conversations(db: Session, username: str) -> list[dict]:
+def get_conversations(db: Session, user_id: str) -> list[dict]:
 
     # Resolve username → User row → user_id
-    user = db.query(User).filter(User.username.ilike(username)).first()
+    user = db.query(User).filter(User.user_id.ilike(user_id)).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
