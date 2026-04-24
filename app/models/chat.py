@@ -1,14 +1,16 @@
 import uuid
 from sqlalchemy import UUID
+from sqlalchemy.types import LargeBinary
 from sqlalchemy import (
     Column, Integer, String, Text,
     Boolean, DateTime, ForeignKey, func
 )
 from sqlalchemy.orm import relationship
 from app.db_connection import Base
+from sqlalchemy import UniqueConstraint
 
 
-# User Table
+# ----------------- User Table ----------------------------------------
 class User(Base):
     __tablename__ = "users"
 
@@ -21,7 +23,7 @@ class User(Base):
     last_seen_at = Column(DateTime(timezone=True), nullable=True)
 
 
-# Conversation Table
+# ---------- Conversation Table --------------------------
 class Conversation(Base):
     __tablename__ = "conversations"
 
@@ -34,7 +36,8 @@ class Conversation(Base):
     messages     = relationship("Message", back_populates="conversation",
                    cascade="all, delete", order_by="Message.created_at")
 
-# Message Table
+
+# ------------ Message Table---------------------------
 class Message(Base):
     __tablename__ = "messages"
 
@@ -50,8 +53,9 @@ class Message(Base):
     sender          = relationship("User")
     reply_to        = relationship("Message", remote_side="Message.message_id")
     attachments = relationship("MessageAttachment", back_populates="message", cascade="all, delete")
+    
 
-# Read Receipt Table
+# ------- Read Receipt Table -------------------
 class ReadReceipt(Base):
     __tablename__ = "read_receipts"
 
@@ -59,16 +63,18 @@ class ReadReceipt(Base):
     user_id      = Column(String(20), ForeignKey("users.user_id", ondelete="CASCADE"), primary_key=True)
     last_read_at = Column(DateTime(timezone=True), server_default=func.now())
 
-# Message attachment table 
+
+#------ Message attachment table ---------------
 class MessageAttachment(Base):
     __tablename__ = "message_attachments"
 
     attachment_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     message_id    = Column(UUID(as_uuid=True), ForeignKey("messages.message_id", ondelete="CASCADE"), nullable=False)
     file_name     = Column(String(255), nullable=False)
-    file_type     = Column(String(50),  nullable=False)  # "image" or "csv"
-    file_url      = Column(String(500), nullable=False)
-    file_size     = Column(Integer,     nullable=True)
+    file_type     = Column(String(50), nullable=False)
+    file_data     = Column(LargeBinary, nullable=False) 
+    file_size     = Column(Integer, nullable=True)
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
     message       = relationship("Message", back_populates="attachments")
-    
+
+
