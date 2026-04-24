@@ -218,16 +218,13 @@ async def signup(user: SignupRequest):
     conn = None
     cur = None
     
-    ADMIN_SECRET_CODE = os.getenv("ADMIN_SIGNUP_CODE")
 
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         
-        if user.invite_code == ADMIN_SECRET_CODE:
-            assigned_role = "Admin"
-        else:
-            assigned_role = "Client"
+
+        assigned_role = "Client"
         
         cur.execute("SELECT username FROM users WHERE username = %s", (user.username,))
         if cur.fetchone():
