@@ -317,7 +317,11 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
         # 1. Update the query to include is_inactive
-        query = "SELECT username, password, role, is_inactive FROM users WHERE username = %s OR email = %s;"
+        query = """
+            SELECT user_id, username, password, role, is_inactive, auth_provider 
+            FROM users 
+            WHERE username = %s OR email = %s;
+        """
         cur.execute(query, (form_data.username, form_data.username))
         
         results = cur.fetchall()
@@ -353,17 +357,22 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             )
 
         access_token = create_access_token(
-            data={"sub": user_record['username'], "role": user_record['role']}
-        )
+                    data={
+                        "sub": user_record['username'], 
+                        "id": user_record['user_id'], 
+                        "role": user_record['role']
+                    }
+                )
 
         return {
-            "status": "success",
-            "access_token": access_token,
-            "token_type": "bearer",
-            "user": {
-                "username": user_record['username'],
-                "role": user_record['role']
-            }
+                    "status": "success",
+                    "access_token": access_token,
+                    "token_type": "bearer",
+                    "user": {
+                        "id": user_record['user_id'], 
+                        "username": user_record['username'],
+                        "role": user_record['role']
+                    }
         }
     except HTTPException:
         raise
