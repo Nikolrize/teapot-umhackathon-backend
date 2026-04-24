@@ -6,14 +6,16 @@ from datetime import datetime, timezone
 from app.models.chat import User, Conversation, Message, ReadReceipt, MessageAttachment
 from sqlalchemy import or_
 from fastapi import HTTPException
-from uuid import UUID
+from uuid import UUID, uuid4
 
 
-# Get user
+# -- Get user ---------------------------------------------------------
+
 def get_user(db: Session, user_id: str) -> User:
     return db.query(User).filter(User.user_id == user_id).first()
 
-# Search user by name
+# Search user by name -----------------------------------------------------
+
 def search_users(db: Session, query: str, my_user_id: str) -> list[dict]:
     me = db.query(User).filter(User.user_id == my_user_id).first()
     if not me:
@@ -41,7 +43,9 @@ def search_users(db: Session, query: str, my_user_id: str) -> list[dict]:
 
     return results
 
-# Set user status
+
+# -- Set user status ------------------------------------------------------
+
 def set_user_status(db: Session, username: str, status: str):
     user = db.query(User).filter(User.username == username).first()
     if user:
@@ -54,7 +58,9 @@ def set_user_status(db: Session, username: str, status: str):
         print(f"Read Receipt Error: {e}")
         raise e
 
-# IDs are stored in database
+
+# -- IDs are stored in database ---------------------------
+
 def get_or_create_conversation(db: Session, user_a_id: str, user_b_id: str) -> Conversation:
     a, b = (user_a_id, user_b_id) if user_a_id < user_b_id else (user_b_id, user_a_id)
     conv = db.query(Conversation).filter(
@@ -65,8 +71,8 @@ def get_or_create_conversation(db: Session, user_a_id: str, user_b_id: str) -> C
     if not conv:
         conv = Conversation(user_a_id=a, user_b_id=b)
         db.add(conv)
-        db.flush()         # generates conver_id
-        db.refresh(conv)   # ← add this: loads the generated PK back into the object
+        db.flush()         
+        db.refresh(conv)   
 
         db.add(ReadReceipt(conver_id=conv.conver_id, user_id=user_a_id))
         db.add(ReadReceipt(conver_id=conv.conver_id, user_id=user_b_id))
@@ -74,6 +80,9 @@ def get_or_create_conversation(db: Session, user_a_id: str, user_b_id: str) -> C
         db.refresh(conv)
 
     return conv
+
+
+# ------------------ Get Conversations -----------------------------------
 
 # Aliased for query
 UserA = aliased(User, name="user_a")
@@ -93,7 +102,7 @@ def get_conversations(db: Session, user_id: str) -> list[dict]:
         .join(UserA, Conversation.user_a_id == UserA.user_id)
         .join(UserB, Conversation.user_b_id == UserB.user_id)
         .filter(or_(
-            Conversation.user_a_id == user.user_id,  # matched by user_id, not username
+            Conversation.user_a_id == user.user_id,
             Conversation.user_b_id == user.user_id
         ))
     )
@@ -137,7 +146,8 @@ def get_conversations(db: Session, user_id: str) -> list[dict]:
     return output
 
 
-# Get Messages
+# -- Get Messages ---------------------------------------------------------
+
 def get_messages(db: Session, conversation_id: str, limit: int = 50, before_timestamp: datetime = None) -> list[Message]:
     query = (
         db.query(Message)
@@ -155,7 +165,8 @@ def get_messages(db: Session, conversation_id: str, limit: int = 50, before_time
 
     return list(reversed(query.all()))
 
-# Save Messages
+# -- Save Messages ----------------------------------------------------
+
 def save_message(db: Session, conversation_id: str, sender: User, content: str, reply_to_id: str = None) -> Message:
     msg = Message(
         conver_id=conversation_id,
@@ -169,7 +180,8 @@ def save_message(db: Session, conversation_id: str, sender: User, content: str, 
     return msg
 
 
-# Delete Messages
+# -- Delete Messages ------------------------------------------------------
+
 def delete_message(db: Session, message_id: str, user_id: str, confirm: bool) -> str:
     if not confirm:
         return "cancelled"
@@ -187,7 +199,8 @@ def delete_message(db: Session, message_id: str, user_id: str, confirm: bool) ->
     return "deleted"
 
 
-# Mark as Read
+# -- Mark as Read ----------------------------------------------------------
+
 def mark_as_read(db: Session, conversation_id: int, user_id: str):
     rr = db.query(ReadReceipt).filter(
         ReadReceipt.conver_id == conversation_id,
@@ -205,42 +218,67 @@ def mark_as_read(db: Session, conversation_id: int, user_id: str):
         raise e
 
 
-# File Upload Section
-UPLOAD_DIR = "uploads"
+# -- File Upload Section --------------------------------------------------
+
 ALLOWED_TYPES = {
     "image/jpeg": "image", "image/png": "image",
     "image/gif": "image",  "image/webp": "image",
-    "text/csv": "csv",     "application/vnd.ms-excel": "csv"
+    "text/csv": "csv",     "application/vnd.ms-excel": "csv",
+    "application/pdf": "pdf",
 }
+
+# File Uploadation
+def upload_file(db: Session, conversation_id: str, current_user_id: str, file: UploadFile) -> dict:
+    """Save the file, create a placeholder message, attach the file to it, and return payload."""
+    if file.content_type not in ALLOWED_TYPES:
+        raise HTTPException(status_code=400, detail="Only images, CSVs, and PDFs are allowed")
+
+    user = get_user(db, current_user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Save a message whose content is the filename (acts as the "caption")
+    msg = save_message(db, conversation_id, user, f"[file] {file.filename}")
+
+    # Persist the file to disk and create the attachment row
+    attachment = save_attachment(db, msg.message_id, file)
+
+    return {
+        "message_id":    str(msg.message_id),
+        "conversation_id": conversation_id,
+        "sender_id":     current_user_id,
+        "sender_username": user.username,
+        "content":       f"[file] {file.filename}",
+        "created_at":    msg.created_at.isoformat(),
+        "attachment": {
+            "attachment_id": str(attachment.attachment_id),
+            "file_name":     attachment.file_name,
+            "file_type":     attachment.file_type,
+            "file_size":     attachment.file_size,
+        }
+    }
 
 # Save file attachment to database and file system
 def save_attachment(db: Session, message_id: UUID, file: UploadFile) -> MessageAttachment:
     if file.content_type not in ALLOWED_TYPES:
-        raise HTTPException(status_code=400, detail="Only images and CSV files are allowed")
+        raise HTTPException(status_code=400, detail="Only images, CSVs, and PDFs are allowed")
 
     file_type = ALLOWED_TYPES[file.content_type]
-    folder    = os.path.join(UPLOAD_DIR, file_type)
-    os.makedirs(folder, exist_ok=True)
 
-    # Unique filename to avoid collisions
-    ext       = os.path.splitext(file.filename)[1]
-    unique_name = f"{str(UUID.uuid4())}{ext}"
-    file_path   = os.path.join(folder, unique_name)
-
-    with open(file_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-
-    file_size = os.path.getsize(file_path)
-    file_url  = f"/{file_path.replace(os.sep, '/')}"
+    # Read file into memory (BLOB)
+    file_data = file.file.read()
+    file_size = len(file_data)
 
     attachment = MessageAttachment(
         message_id=message_id,
         file_name=file.filename,
         file_type=file_type,
-        file_url=file_url,
+        file_data=file_data,
         file_size=file_size,
     )
+
     db.add(attachment)
     db.commit()
     db.refresh(attachment)
     return attachment
+
