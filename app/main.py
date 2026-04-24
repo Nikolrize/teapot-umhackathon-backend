@@ -6,6 +6,7 @@ from app.api.routes import router
 from app.api.auth_routes import router as auth_router
 from app.api.chat_routes import router as chat_router
 from app.core.config import SECRET_KEY
+from app.api.crud_routes import router as crud_routes
 
 # Set this BEFORE app initialization
 os.environ['AUTHLIB_INSECURE_TRANSPORT'] = 'true'
@@ -18,7 +19,7 @@ app.add_middleware(
     secret_key=SECRET_KEY, # Use your real secret key from config
     session_cookie="fastapi_session",
     same_site="lax",
-    https_only=True
+    https_only=False
 )
 
 app.add_middleware(
@@ -32,4 +33,5 @@ app.add_middleware(
 # Only include the routers you need
 app.include_router(router)
 app.include_router(auth_router)
+app.include_router(crud_routes)
 app.include_router(chat_router)

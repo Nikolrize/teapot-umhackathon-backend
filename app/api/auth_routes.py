@@ -14,9 +14,18 @@ from authlib.integrations.base_client.errors import MismatchingStateError
 from pydantic import BaseModel, EmailStr, Field
 from app.db_connection import get_db_connection
 from .auth_utils import create_access_token
+from datetime import datetime, timedelta, timezone
+from jose import jwt
 
 router = APIRouter(prefix="/auth")
 
+def get_db_connection():
+    # Reuse your existing connection logic here
+    return psycopg2.connect(os.getenv("DATABASE_URL"))
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
 # -----------------------------google/github login--------------------------------
 
@@ -26,6 +35,62 @@ router = APIRouter(prefix="/auth")
 # BASE_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip("/") #local
 BASE_URL = os.getenv("BASE_URL", "http://127.0.0.1:8000").rstrip("/") #render deployment
 
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def sync_oauth_user_to_db(provider_data: dict, provider_name: str):
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        # Normalize Identity info
+        p_id = str(provider_data.get('sub') or provider_data.get('id'))
+        email = provider_data.get('email')
+        username = provider_data.get('name') or provider_data.get('login') or f"{provider_name}_user_{p_id[:5]}"
+
+        # 1. Search existing user
+        cur.execute("SELECT * FROM users WHERE provider_id = %s OR email = %s;", (p_id, email))
+        db_user = cur.fetchone()
+
+        if db_user:
+            if db_user['is_inactive']:
+                raise HTTPException(status_code=403, detail="Account deactivated. Contact support.")
+            
+            # Sync provider info if they previously used local login
+            cur.execute(
+                "UPDATE users SET last_seen_at = %s, auth_provider = %s, provider_id = %s WHERE user_id = %s",
+                (datetime.now(timezone.utc), provider_name, p_id, db_user['user_id'])
+            )
+            user_record = db_user
+        else:
+            # 2. Insert New User (Trigger handles CLI ID)
+            query = """
+                INSERT INTO users (username, email, role, auth_provider, provider_id, is_inactive)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING user_id, username, role;
+            """
+            cur.execute(query, (username, email, 'Client', provider_name, p_id, False))
+            user_record = cur.fetchone()
+
+        conn.commit()
+        
+        # 3. Create your JWT Token
+        access_token = create_access_token(data={"sub": user_record['username'], "role": user_record['role']})
+        
+        return {
+            "status": "success",
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {
+                "id": user_record['user_id'],
+                "username": user_record['username']
+            }
+        }
+    finally:
+        conn.close()
 
 @router.get("/github/login")
 async def github_login(request: Request):
@@ -38,15 +103,14 @@ async def github_callback(request: Request):
     try:
         token = await oauth.github.authorize_access_token(request)
         resp = await oauth.github.get("user", token=token)
-        user = resp.json()
+        user_data = resp.json()
         
-        return {
-            "status": "success",
-            "provider": "github",
-            "user": user
-        }
-    except MismatchingStateError:
-        return HTMLResponse(content=ERROR_TEMPLATE.format(provider="github"), status_code=400)
+        # GitHub Email privacy fallback
+        if not user_data.get('email'):
+            email_resp = await oauth.github.get("user/emails", token=token)
+            user_data['email'] = next(e['email'] for e in email_resp.json() if e['primary'])
+
+        return sync_oauth_user_to_db(user_data, "github")
     except Exception as e:
         return {"error": str(e)}
 
@@ -60,13 +124,11 @@ async def google_login(request: Request):
 async def google_callback(request: Request):
     try:
         token = await oauth.google.authorize_access_token(request)
-        user = token.get("userinfo")
-        return {"provider": "google", "user": user}
+        return sync_oauth_user_to_db(token.get("userinfo"), "google")
     except MismatchingStateError:
         return HTMLResponse(content=ERROR_TEMPLATE.format(provider="google"), status_code=400)
     except Exception as e:
         return {"error": str(e)}
-
 @router.get("/reset")
 async def reset_session(request: Request):
     request.session.clear()
@@ -117,10 +179,19 @@ class SignupRequest(BaseModel):
     @field_validator('username')
     @classmethod
     def username_rules(cls, v: str) -> str:
-        # 1. Custom length catch
+        # 1. Catch empty strings or just whitespace
+        if not v.strip():
+             raise ValueError('Username cannot be empty.')
+             
+        # 2. Length check
         if len(v) < 3:
             raise ValueError('Username is too short! It must be at least 3 characters.')
-        
+            
+        # 3. Optional: Character check (no special characters)
+        if not v.isalnum():
+            raise ValueError('Username must only contain letters and numbers.')
+            
+        return v
 
     @field_validator('password')
     @classmethod
@@ -151,26 +222,50 @@ async def signup(user: SignupRequest):
 
     try:
         conn = get_db_connection()
-        cur = conn.cursor()
-
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         
         if user.invite_code == ADMIN_SECRET_CODE:
             assigned_role = "Admin"
         else:
             assigned_role = "Client"
         
-
         cur.execute("SELECT username FROM users WHERE username = %s", (user.username,))
         if cur.fetchone():
             cur.close()
             raise HTTPException(status_code=400, detail="username already registered, Please Try Another Username")
 
-        # 1. Check if user exists
-        cur.execute("SELECT email FROM users WHERE email = %s", (user.email,))
-        if cur.fetchone():
-            cur.close()
-            raise HTTPException(status_code=400, detail="Email already registered, Please Try Another Email")
+        cur.execute(
+            "SELECT is_inactive, auth_provider FROM users WHERE email = %s", 
+            (user.email,)
+        )
+        existing_user = cur.fetchone()
 
+        if existing_user:
+            # Check 1: Is the account deactivated? (Highest priority)
+            if existing_user['is_inactive']:
+                cur.close()
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, 
+                    detail="This account has been deactivated. Please contact support@teapot.gmail.com for more detail."
+                )
+
+            # Check 2: Is this an OAuth account trying to sign up manually?
+            provider = existing_user['auth_provider']
+            if provider != 'local':
+                cur.close()
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT, 
+                    detail=f"This email is already registered via {provider.title()}. "
+                           f"Please login with {provider.title()} first to link a password."
+                )
+
+            # Check 3: General "Email Taken" error for active local users
+            cur.close()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="Email already registered. Please try another email or log in."
+            )
+        
         # 2. Insert (Trigger handles the ID)
         query = """
             INSERT INTO users (username, email, password, role)
@@ -210,7 +305,6 @@ async def signup(user: SignupRequest):
 
 @router.post("/login")
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    # 1. Catch Null/Empty inputs immediately before hitting the DB
     if not form_data.username or not form_data.password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -222,25 +316,33 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-        # Secure parameterized query
-        query = "SELECT username, password, role FROM users WHERE username = %s OR email = %s;"
+        # 1. Update the query to include is_inactive
+        query = """
+            SELECT user_id, username, password, role, is_inactive, auth_provider 
+            FROM users 
+            WHERE username = %s OR email = %s;
+        """
         cur.execute(query, (form_data.username, form_data.username))
         
-        # 2. Catch multiple results (Safety check)
         results = cur.fetchall()
         
+        # 2. Check if user exists AND if they are inactive
         if not results:
-            # Generic 401 for security (don't tell them if the user doesn't exist)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
-        # If somehow the DB has duplicates, we take the first one 
         user_record = results[0]
 
-        # 3. Verify password 
+        if user_record['is_inactive']:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail="This account has been deactivated. Please contact support@teapot.gmail.com for more detail."
+            )
+
+        # 4. Verify password (rest of your logic remains the same)
         try:
             is_valid = verify_password(form_data.password, user_record['password'])
         except Exception as e:
@@ -255,26 +357,30 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             )
 
         access_token = create_access_token(
-            data={"sub": user_record['username'], "role": user_record['role']}
-        )
+                    data={
+                        "sub": user_record['username'], 
+                        "id": user_record['user_id'], 
+                        "role": user_record['role']
+                    }
+                )
 
         return {
-            "status": "success",
-            "access_token": access_token,
-            "token_type": "bearer",
-            "user": {
-                "username": user_record['username'],
-                "role": user_record['role']
-            }
+                    "status": "success",
+                    "access_token": access_token,
+                    "token_type": "bearer",
+                    "user": {
+                        "id": user_record['user_id'], 
+                        "username": user_record['username'],
+                        "role": user_record['role']
+                    }
         }
     except HTTPException:
-            # Re-raise HTTPExceptions so FastAPI handles them (like the 401/400 above)
         raise
     except Exception as e:
         print(f"Login Error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         if conn:
-            if 'cur' in locals() and cur: # Check if cursor was actually created
+            if 'cur' in locals() and cur:
                 cur.close()
             conn.close()
