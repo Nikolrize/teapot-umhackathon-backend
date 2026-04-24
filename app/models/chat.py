@@ -1,3 +1,5 @@
+import uuid
+from sqlalchemy import UUID
 from sqlalchemy import (
     Column, Integer, String, Text,
     Boolean, DateTime, ForeignKey, func
@@ -23,7 +25,7 @@ class User(Base):
 class Conversation(Base):
     __tablename__ = "conversations"
 
-    conver_id    = Column(Integer, primary_key=True)
+    conver_id    = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_a_id    = Column(String(20), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
     user_b_id    = Column(String(20), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
     created_at   = Column(DateTime(timezone=True), server_default=func.now())
@@ -36,10 +38,10 @@ class Conversation(Base):
 class Message(Base):
     __tablename__ = "messages"
 
-    message_id      = Column(Integer, primary_key=True)
-    conver_id       = Column(Integer, ForeignKey("conversations.conver_id", ondelete="CASCADE"), nullable=False)
+    message_id      = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    conver_id       = Column(UUID(as_uuid=True), ForeignKey("conversations.conver_id", ondelete="CASCADE"), nullable=False)
     sender_id       = Column(String(20), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
-    reply_to_id     = Column(Integer, ForeignKey("messages.message_id", ondelete="SET NULL"), nullable=True)
+    reply_to_id     = Column(UUID(as_uuid=True), ForeignKey("messages.message_id", ondelete="SET NULL"), nullable=True)
     content         = Column(Text, nullable=False)
     is_deleted      = Column(Boolean, default=False)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
@@ -47,11 +49,26 @@ class Message(Base):
     conversation    = relationship("Conversation", back_populates="messages")
     sender          = relationship("User")
     reply_to        = relationship("Message", remote_side="Message.message_id")
+    attachments = relationship("MessageAttachment", back_populates="message", cascade="all, delete")
 
 # Read Receipt Table
 class ReadReceipt(Base):
     __tablename__ = "read_receipts"
 
-    conver_id    = Column(Integer, ForeignKey("conversations.conver_id", ondelete="CASCADE"), primary_key=True)
+    conver_id    = Column(UUID(as_uuid=True), ForeignKey("conversations.conver_id", ondelete="CASCADE"), primary_key=True, default=uuid.uuid4)
     user_id      = Column(String(20), ForeignKey("users.user_id", ondelete="CASCADE"), primary_key=True)
     last_read_at = Column(DateTime(timezone=True), server_default=func.now())
+
+# Message attachment table 
+class MessageAttachment(Base):
+    __tablename__ = "message_attachments"
+
+    attachment_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    message_id    = Column(UUID(as_uuid=True), ForeignKey("messages.message_id", ondelete="CASCADE"), nullable=False)
+    file_name     = Column(String(255), nullable=False)
+    file_type     = Column(String(50),  nullable=False)  # "image" or "csv"
+    file_url      = Column(String(500), nullable=False)
+    file_size     = Column(Integer,     nullable=True)
+    created_at    = Column(DateTime(timezone=True), server_default=func.now())
+    message       = relationship("Message", back_populates="attachments")
+    
