@@ -85,19 +85,20 @@ async def lifespan(_: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.add_middleware(
     SessionMiddleware,
     secret_key=SECRET_KEY,
     session_cookie="fastapi_session",
     same_site="lax",
     https_only=False,
+)
+
+# Keep CORS as outermost middleware so even error responses include CORS headers.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
