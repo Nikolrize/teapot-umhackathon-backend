@@ -2,11 +2,11 @@
 first: pip install -r requirements.txt
 next:  fastapi dev app/main.py
 
-#to use mcp
+# To use MCP
 cd um-backend
 pip install mcp
 
 
-use this 2 to login
+Use these 2 to login
 http://localhost:8000/auth/github/login
 http://localhost:8000/auth/google/login

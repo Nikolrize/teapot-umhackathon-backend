@@ -19,6 +19,7 @@ from app.api.dashboard_routes import router as dashboard_router
 from app.api.model_routes import router as model_router
 from app.api.file_routes import router as file_router
 from app.api.generation_routes import router as generation_router
+from app.api import leads_routes as leads_overview
 from app.api.purchase_routes import router as purchase_router
 from app.api.settings_routes import router as settings_router
 from app.core.config import SECRET_KEY
@@ -92,3 +93,4 @@ app.include_router(settings_router, prefix="/admin")
 app.include_router(purchase_router, prefix="/client")
 app.include_router(crud_routes)
 app.include_router(chat_router)
+app.include_router(leads_overview.router)
