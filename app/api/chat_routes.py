@@ -93,7 +93,7 @@ def get_messages(
 
 # -- Route: Delete message -----------------------------------------------------
 
-@router.delete("/messages/{message_id}")
+@router.post("/messages/delete/{message_id}")
 def delete_message(
     message_id: str,
     current_user_id: str,

@@ -54,14 +54,14 @@ def get_project_route(project_id: str):
     return project
 
 
-@router.patch("/projects/{project_id}")
+@router.post("/projects/update/{project_id}")
 def update_project_route(project_id: str, data: ProjectUpdateRequest):
     if not get_project(project_id):
         raise HTTPException(status_code=404, detail="Project not found")
     return update_project(project_id, data.model_dump(exclude_unset=True))
 
 
-@router.delete("/projects/{project_id}")
+@router.post("/projects/delete/{project_id}")
 def delete_project_route(project_id: str):
     if not get_project(project_id):
         raise HTTPException(status_code=404, detail="Project not found")
@@ -100,7 +100,7 @@ def get_session_route(session_id: str):
     return {"session": session, "history": get_session_history(session_id)}
 
 
-@router.delete("/sessions/{session_id}")
+@router.post("/sessions/delete/{session_id}")
 def delete_session_route(session_id: str):
     if not get_session(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
