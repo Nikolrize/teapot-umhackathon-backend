@@ -74,8 +74,9 @@ def call_glm(
 ) -> str:
     """One-shot call. Returns reply text only (no user context for token tracking)."""
     provider    = model_provider or _DEFAULT_PROVIDER
-    temperature = float(temperature)
-    top_p       = float(top_p)
+    temperature = float(temperature) if temperature is not None else 0.7
+    top_p       = float(top_p) if top_p is not None else 0.9
+    max_tokens  = int(max_tokens) if max_tokens is not None else 1000
 
     if isinstance(context, dict):
         task     = context.get("task", "")
@@ -128,8 +129,9 @@ def call_glm_session(
     Tokens are actual input+output counts from the API for accurate billing.
     """
     provider    = model_provider or _DEFAULT_PROVIDER
-    temperature = float(temperature)
-    top_p       = float(top_p)
+    temperature = float(temperature) if temperature is not None else 0.7
+    top_p       = float(top_p) if top_p is not None else 0.9
+    max_tokens  = int(max_tokens) if max_tokens is not None else 1000
 
     if provider == "gemini":
         return _call_gemini_session(
