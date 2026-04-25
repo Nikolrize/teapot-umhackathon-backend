@@ -2,7 +2,7 @@ import psycopg2.extras
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db_connection import get_db, get_db_connection
-from app.models.models import User, Conversation, Message
+from app.models.models import User
 from app.models.schemas import AdminUserUpdate
 from sqlalchemy import or_ , text
 from datetime import datetime, timezone
@@ -180,7 +180,7 @@ def list_all_users():
 
 @router.patch("/admin/users/{user_id}")
 def admin_update_user(user_id: str, data: AdminUserUpdate):
-    updates = {k: v for k, v in data.model_dump(exclude_none=True).items() if k in _ADMIN_ALLOWED_FIELDS}
+    updates = {k: v for k, v in data.model_dump(exclude_unset=True).items() if k in _ADMIN_ALLOWED_FIELDS}
     if not updates:
         raise HTTPException(status_code=400, detail="No valid fields to update")
     if "role" in updates and updates["role"] not in ("Admin", "Client"):
@@ -269,8 +269,8 @@ async def admin_create_user(
         
         # INSERT
         insert_query = text("""
-            INSERT INTO users (username, email, password, role)
-            VALUES (:username, :email, :password, :role)
+            INSERT INTO users (username, email, password, role, max_token, token_used, purchased_token_remaining)
+            VALUES (:username, :email, :password, :role, :max_token, :token_used, :purchased_token_remaining)
             RETURNING user_id, username, role;
         """)
         
@@ -278,7 +278,10 @@ async def admin_create_user(
             "username": payload.username,
             "email": payload.email,
             "password": hashed_pwd,
-            "role": payload.role
+            "role": payload.role,
+            "max_token": 50000 if payload.role == "Client" else 0,
+            "token_used": 0,
+            "purchased_token_remaining": 0
         })
         
         new_user = result.mappings().fetchone()

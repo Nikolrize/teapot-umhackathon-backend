@@ -4,6 +4,7 @@ from app.services.project_service import get_session, record_message, get_sessio
 from app.services.reference_service import get_user_agent_references
 from app.services.glm_service import call_glm_session
 from app.services.model_service import resolve_agent_model
+from app.services.token_service import check_and_refresh, is_within_limit, consume_tokens
 
 router = APIRouter(prefix="/sessions")
 
@@ -82,11 +83,17 @@ async def upload_and_chat(
         base += f"References:\n{ref_block}\n\n"
     system_prompt = base + f"Your task: {session['task']}"
 
-    # ── Call agent and persist both sides of the exchange ──────────────────────
+    # ── Token gate ─────────────────────────────────────────────────────────────
     model = resolve_agent_model(session.get("model_id"))
+    token_info = check_and_refresh(session["user_id"])
+    if not is_within_limit(token_info):
+        raise HTTPException(
+            status_code=402,
+            detail="Token limit reached. Please purchase more tokens to continue.",
+        )
 
     record_message(session_id, enriched_message, "prompt")
-    reply = call_glm_session(
+    reply, tokens_used = call_glm_session(
         session["max_token"], system_prompt, messages,
         session["temperature"], session["top_p"],
         api_key=model["api_key"] if model else None,
@@ -94,6 +101,7 @@ async def upload_and_chat(
         model_provider=model["model_provider"] if model else None,
     )
     record_message(session_id, reply, "reply")
+    consume_tokens(session["user_id"], tokens_used)
 
     return {
         "filename": file.filename,

@@ -519,11 +519,11 @@ def generate_document(
     """
     system, user = build_prompts(session, references, topic, doc_type)
 
-    raw = call_glm_session(
+    raw, tokens_used = call_glm_session(
         4096,
         system,
         [{"role": "user", "content": user}],
-        temperature=0.65,   # Slightly creative but disciplined
+        temperature=0.65,
         top_p=0.90,
         api_key=model_info["api_key"]        if model_info else None,
         model_name=model_info["model_name"]  if model_info else None,
@@ -535,18 +535,14 @@ def generate_document(
     safe_title = re.sub(r"[^\w\s-]", "", data.get("title", "report"))[:40].strip().replace(" ", "_")
 
     if doc_type == "pdf":
-        return (
-            _build_pdf(data),
-            f"{safe_title}.pdf",
-            "application/pdf",
-        )
+        return _build_pdf(data), f"{safe_title}.pdf", "application/pdf", tokens_used
     if doc_type == "ppt":
         return (
             _build_pptx(data),
             f"{safe_title}.pptx",
             "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            tokens_used,
         )
-    # csv
     file_bytes, filename = _build_csv(data)
     mime = "application/zip" if filename.endswith(".zip") else "text/csv"
-    return file_bytes, filename, mime
+    return file_bytes, filename, mime, tokens_used

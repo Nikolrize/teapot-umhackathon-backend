@@ -9,6 +9,7 @@ from app.services.agent_service import get_agent
 from app.services.reference_service import get_user_agent_references
 from app.services.glm_service import call_glm_session
 from app.services.model_service import resolve_agent_model
+from app.services.token_service import check_and_refresh, is_within_limit, consume_tokens
 
 router = APIRouter()
 
@@ -57,7 +58,7 @@ def get_project_route(project_id: str):
 def update_project_route(project_id: str, data: ProjectUpdateRequest):
     if not get_project(project_id):
         raise HTTPException(status_code=404, detail="Project not found")
-    return update_project(project_id, data.model_dump(exclude_none=True))
+    return update_project(project_id, data.model_dump(exclude_unset=True))
 
 
 @router.delete("/projects/{project_id}")
@@ -80,7 +81,10 @@ def create_session_route(data: SessionCreateRequest):
         raise HTTPException(status_code=404, detail="Agent not found")
     if agent["isdisable"]:
         raise HTTPException(status_code=403, detail=f"Agent '{agent['agent_name']}' is currently disabled")
-    return create_session(data.user_id, data.project_id, agent["agent_id"], data.session_name)
+    session = create_session(data.user_id, data.project_id, agent["agent_id"], data.session_name)
+    if agent.get("conversation_starter"):
+        record_message(session["session_id"], agent["conversation_starter"], "reply")
+    return session
 
 
 @router.get("/sessions/user/{user_id}")
@@ -140,11 +144,18 @@ def chat(session_id: str, data: ChatRequest):
     messages.append({"role": "user", "content": data.message})
 
     system_prompt = _build_system_prompt(session, references)
-
     model = resolve_agent_model(session.get("model_id"))
 
+    # ── Token gate ─────────────────────────────────────────────────────────────
+    token_info = check_and_refresh(session["user_id"])
+    if not is_within_limit(token_info):
+        raise HTTPException(
+            status_code=402,
+            detail="Token limit reached. Please purchase more tokens to continue.",
+        )
+
     record_message(session_id, data.message, "prompt")
-    reply = call_glm_session(
+    reply, tokens_used = call_glm_session(
         session["max_token"], system_prompt, messages,
         session["temperature"], session["top_p"],
         api_key=model["api_key"] if model else None,
@@ -152,5 +163,6 @@ def chat(session_id: str, data: ChatRequest):
         model_provider=model["model_provider"] if model else None,
     )
     record_message(session_id, reply, "reply")
+    consume_tokens(session["user_id"], tokens_used)
 
     return {"reply": reply}

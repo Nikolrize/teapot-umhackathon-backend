@@ -208,25 +208,33 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                 content     = data["content"]
                 reply_to_id = data.get("reply_to_id")
 
-                saved = svc.save_message(db, conv_id, user, content, reply_to_id)
-                conv  = db.query(Conversation).filter(Conversation.conver_id == conv_id).first()
+                try:
+                    saved = svc.save_message(db, conv_id, user, content, reply_to_id)
+                    conv  = db.query(Conversation).filter(Conversation.conver_id == conv_id).first()
 
-                payload = {
-                    "type":            "new_message",
-                    "id":              str(saved.message_id),
-                    "conversation_id": str(conv_id),
-                    "sender_id":       str(user_id),
-                    "sender_username": user.username,
-                    "reply_to_id":     str(reply_to_id) if reply_to_id else None,
-                    "content":         content,
-                    "created_at":      saved.created_at.isoformat(),
-                }
+                    payload = {
+                        "type":            "new_message",
+                        "id":              str(saved.message_id),
+                        "conversation_id": str(conv_id),
+                        "sender_id":       str(user_id),
+                        "sender_username": user.username,
+                        "reply_to_id":     str(reply_to_id) if reply_to_id else None,
+                        "content":         content,
+                        "created_at":      saved.created_at.isoformat(),
+                    }
 
-                await chat_manager.send_to_user(user_id, payload)
+                    await chat_manager.send_to_user(user_id, payload)
 
-                if conv:
-                    recipient_id = conv.user_b_id if conv.user_a_id == user_id else conv.user_a_id
-                    await chat_manager.send_to_user(recipient_id, payload)
+                    if conv:
+                        recipient_id = conv.user_b_id if conv.user_a_id == user_id else conv.user_a_id
+                        await chat_manager.send_to_user(recipient_id, payload)
+                except HTTPException as e:
+                    await chat_manager.send_to_user(user_id, {
+                        "type":    "error",
+                        "status":  e.status_code,
+                        "detail":  e.detail,
+                    })
+
 
             elif action == "typing":
                 await chat_manager.send_to_user(data["recipient_id"], {

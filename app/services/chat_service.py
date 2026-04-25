@@ -7,6 +7,7 @@ from app.models.chat import User, Conversation, Message, ReadReceipt, MessageAtt
 from sqlalchemy import or_
 from fastapi import HTTPException
 from uuid import UUID, uuid4
+from app.services.token_service import check_and_refresh, is_within_limit, consume_tokens
 
 
 # -- Get user ---------------------------------------------------------
@@ -168,6 +169,26 @@ def get_messages(db: Session, conversation_id: str, limit: int = 50, before_time
 # -- Save Messages ----------------------------------------------------
 
 def save_message(db: Session, conversation_id: str, sender: User, content: str, reply_to_id: str = None) -> Message:
+    """
+    Save a message and consume tokens based on message length.
+    Raises HTTPException if user is out of tokens or if token refresh fails.
+    """
+    # Check and refresh token window (initialize if first message)
+    token_info = check_and_refresh(sender.user_id)
+    if not token_info:
+        raise HTTPException(status_code=404, detail="User token info not found")
+    
+    # Check if user is within token limit
+    if not is_within_limit(token_info):
+        raise HTTPException(
+            status_code=402,
+            detail="Token limit reached. Please purchase more tokens to continue.",
+        )
+    
+    # Calculate token cost: 1 token per 10 characters, minimum 1
+    tokens_cost = max(1, len(content) // 10)
+    
+    # Save the message
     msg = Message(
         conver_id=conversation_id,
         sender_id=sender.user_id,
@@ -177,6 +198,10 @@ def save_message(db: Session, conversation_id: str, sender: User, content: str, 
     db.add(msg)
     db.commit()
     db.refresh(msg)
+    
+    # Consume tokens after successful message save
+    consume_tokens(sender.user_id, tokens_cost)
+    
     return msg
 
 
