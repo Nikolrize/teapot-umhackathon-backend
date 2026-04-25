@@ -1,5 +1,6 @@
 import psycopg2.extras
-from fastapi import APIRouter, Depends, HTTPException, status
+import re
+from fastapi import UploadFile, File,APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db_connection import get_db, get_db_connection
 from app.models.models import User
@@ -12,9 +13,11 @@ from typing import Optional
 from app.api.auth_routes import hash_password
 from app.core.security import get_current_user
 import psycopg2.extras
-
+import cloudinary
+import cloudinary.uploader
+from cloudinary.utils import cloudinary_url
 # from app.models.schemas import UserUpdate, MessageUpdate
-
+from app.core.config import CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
 router = APIRouter(prefix="/api", tags=["CRUD Operations"])
 
 
@@ -208,15 +211,15 @@ def admin_update_user(user_id: str, data: AdminUserUpdate):
     conn.close()
     return result
 
-# MOCK_MASTER_ADMIN = {
-#     "id": "ADM0004",
-#     "username": "Yagoo",
-#     "role": "Master Admin"
-# }
+MOCK_MASTER_ADMIN = {
+    "id": "ADM0004",
+    "username": "Yagoo",
+    "role": "Master Admin"
+}
 
-# # This is a dummy function to replace your real auth for this test
-# async def get_mock_user():
-#     return MOCK_MASTER_ADMIN
+# This is a dummy function to replace your real auth for this test
+async def get_mock_user():
+    return MOCK_MASTER_ADMIN
 
 class AdminUserCreateSchema(BaseModel):
     username: str
@@ -305,3 +308,60 @@ async def admin_create_user(
         raise HTTPException(status_code=500, detail="Internal Server Error")
     finally:
         db.close()
+
+cloudinary.config(
+    cloud_name=CLOUDINARY_CLOUD_NAME,
+    api_key=CLOUDINARY_API_KEY,
+    api_secret=CLOUDINARY_API_SECRET,
+    secure=True
+)
+
+@router.patch("/users/update/avatar")
+async def update_avatar(
+    file: UploadFile = File(...), 
+    current_user: dict = Depends(get_mock_user)
+):
+    # 2. Validation: Check if it's an image
+    allowed_extensions = {"jpg", "jpeg", "png", "webp"}
+    file_ext = file.filename.split(".")[-1].lower()
+    if file_ext not in allowed_extensions:
+        raise HTTPException(status_code=400, detail="Invalid image format.")
+
+    conn = None
+    try:
+        # Pass the file stream directly
+        upload_result = cloudinary.uploader.upload(
+            file.file,
+            folder="teapot_avatars",
+            public_id=f"user_{current_user['id']}",
+            overwrite=True,
+            transformation=[
+                {'width': 500, 'height': 500, 'crop': "fill", 'gravity': "face"}
+            ]
+        )   
+
+        # 4. Get the optimized URL
+        # secure_url is the https link to the image
+        new_avatar_url = upload_result.get("secure_url")
+
+        # 5. Update your PostgreSQL VARCHAR column
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        query = "UPDATE users SET avatar_url = %s WHERE user_id = %s"
+        cur.execute(query, (new_avatar_url, current_user['id']))
+        conn.commit()
+
+        return {
+            "status": "success",
+            "message": "Avatar uploaded!",
+            "avatar_url": new_avatar_url
+        }
+
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"Cloudinary/DB Error: {e}")
+        raise HTTPException(status_code=500, detail="Cloud upload failed.")
+    finally:
+        if conn: conn.close()
+

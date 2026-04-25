@@ -19,3 +19,4 @@ pandas
 fpdf2
 python-pptx
 pydantic[email]
+cloudinary
