@@ -33,8 +33,8 @@ class ConversationOut(BaseModel):
 # -- Route: Search user ----------------------------------------------------------
 
 @router.get("/users/search")
-def search_users(other_user_name: str, current_user_id: str, db: Session = Depends(get_db)):
-    return svc.search_users(db, other_user_name, current_user_id)
+def search_users(other_user_id: str, current_user_id: str, db: Session = Depends(get_db)):
+    return svc.search_users(db, other_user_id, current_user_id)
 
 
 # -- Route: List all conversations of current user ---------------------------------
