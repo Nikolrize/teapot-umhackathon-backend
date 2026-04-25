@@ -162,7 +162,7 @@ def chat(session_id: str, data: ChatRequest):
         model_name=model["model_name"] if model else None,
         model_provider=model["model_provider"] if model else None,
     )
-    record_message(session_id, reply, "reply")
+    reply_msg = record_message(session_id, reply, "reply")
     consume_tokens(session["user_id"], tokens_used)
 
-    return {"reply": reply}
+    return {"reply": reply, "prompt_id": reply_msg["prompt_id"]}
