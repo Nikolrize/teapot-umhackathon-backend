@@ -8,7 +8,7 @@ from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 
-# -- Session table --------------------------------------------------------
+# ---- Session table --------------------------------------------------------
 class ChatSession(Base):
     __tablename__ = "session"
 
@@ -20,7 +20,7 @@ class ChatSession(Base):
     session_name = Column(VARCHAR(255), nullable=False)
 
 
-# -- Agents Table ---------------------------------------------------------
+# ---- Agents Table ---------------------------------------------------------
 from sqlalchemy import Column, String, Boolean, Integer, Numeric, Text
 from sqlalchemy.dialects.postgresql import UUID, VARCHAR
 import uuid
