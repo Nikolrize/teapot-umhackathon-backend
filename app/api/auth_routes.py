@@ -16,7 +16,7 @@ from app.db_connection import get_db_connection
 from .auth_utils import create_access_token
 from datetime import datetime, timedelta, timezone
 from jose import jwt
-
+from sqlalchemy import text
 router = APIRouter(prefix="/auth")
 
 def get_db_connection():
@@ -299,85 +299,65 @@ async def signup(user: SignupRequest):
         if cur: cur.close()
         if conn: conn.close()
 # ----------------------------------login-------------------------------
-
+class LoginSchema(BaseModel):
+    username: str
+    password: str
+    
 @router.post("/login")
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    if not form_data.username or not form_data.password:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username/Email and password are required"
-        )
-
+async def login(payload: LoginSchema):
     conn = None
     try:
-        conn = get_db_connection()
+        conn = get_db_connection() 
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-        # 1. Update the query to include is_inactive
+
         query = """
-            SELECT user_id, username, password, role, is_inactive, auth_provider 
+            SELECT user_id, username, password, role, is_inactive 
             FROM users 
             WHERE username = %s OR email = %s;
         """
-        cur.execute(query, (form_data.username, form_data.username))
-        
-        results = cur.fetchall()
-        
-        # 2. Check if user exists AND if they are inactive
-        if not results:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        
-        user_record = results[0]
+        cur.execute(query, (payload.username, payload.username))
+        user_record = cur.fetchone()
+
+        if not user_record:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
 
         if user_record['is_inactive']:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, 
-                detail="This account has been deactivated. Please contact support@teapot.gmail.com for more detail."
+                status_code=403, 
+                detail="This account has been deactivated. Contact support@teapot.gmail.com."
             )
 
-        # 4. Verify password (rest of your logic remains the same)
-        try:
-            is_valid = verify_password(form_data.password, user_record['password'])
-        except Exception as e:
-            print(f"Bcrypt Verification Error: {e}")
-            is_valid = False
+        # 5. Verify Password
+        if not verify_password(payload.password, user_record['password']):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        if not is_valid:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
+        # 6. Generate Token
         access_token = create_access_token(
-                    data={
-                        "sub": user_record['username'], 
-                        "id": user_record['user_id'], 
-                        "role": user_record['role']
-                    }
-                )
+            data={
+                "sub": user_record['username'], 
+                "id": str(user_record['user_id']), 
+                "role": user_record['role']
+            }
+        )
 
         return {
-                    "status": "success",
-                    "access_token": access_token,
-                    "token_type": "bearer",
-                    "user": {
-                        "id": user_record['user_id'], 
-                        "username": user_record['username'],
-                        "role": user_record['role']
-                    }
+            "status": "success",
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {
+                "id": user_record['user_id'], 
+                "username": user_record['username'],
+                "role": user_record['role']
+            }
         }
+
     except HTTPException:
         raise
     except Exception as e:
         print(f"Login Error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
     finally:
-        if conn:
-            if 'cur' in locals() and cur:
-                cur.close()
-            conn.close()
+        # 7. CRITICAL: Always close raw psycopg2 connections manually
+        if 'cur' in locals() and cur: cur.close()
+        if conn: conn.close()
