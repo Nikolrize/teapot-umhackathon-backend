@@ -61,7 +61,7 @@ def get_all_agents():
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("""
-        SELECT agent_id, agent_name, task, requirements, type, isdisable, max_token, temperature, top_p, model_id
+        SELECT agent_id, agent_name, task, requirements, type, isdisable, max_token, temperature, top_p, model_id, conversation_starter
         FROM agents ORDER BY type, agent_name
     """)
     rows = cur.fetchall()
@@ -75,7 +75,7 @@ def get_agent(agent_id: str):
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("""
-        SELECT agent_id, agent_name, task, requirements, type, isdisable, max_token, temperature, top_p, model_id
+        SELECT agent_id, agent_name, task, requirements, type, isdisable, max_token, temperature, top_p, model_id, conversation_starter
         FROM agents WHERE agent_id = %s
     """, (agent_id,))
     row = cur.fetchone()
@@ -86,7 +86,7 @@ def get_agent(agent_id: str):
 
 
 def update_agent(agent_id: str, updates: dict):
-    allowed = {"task", "requirements", "isdisable", "max_token", "temperature", "top_p", "model_id"}
+    allowed = {"task", "requirements", "isdisable", "max_token", "temperature", "top_p", "model_id", "conversation_starter"}
     fields = {k: v for k, v in updates.items() if k in allowed}
     if not fields:
         return get_agent(agent_id)
@@ -111,13 +111,13 @@ def create_agent(data: dict):
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO agents (agent_name, task, requirements, type, max_token, top_p, temperature, model_id)
-        VALUES (%s, %s, %s, 'custom', %s, %s, %s, %s)
-        RETURNING agent_id, agent_name, task, requirements, type, isdisable, max_token, temperature, top_p, model_id
+        INSERT INTO agents (agent_name, task, requirements, type, max_token, top_p, temperature, model_id, conversation_starter)
+        VALUES (%s, %s, %s, 'custom', %s, %s, %s, %s, %s)
+        RETURNING agent_id, agent_name, task, requirements, type, isdisable, max_token, temperature, top_p, model_id, conversation_starter
     """, (
         data["agent_name"], data["task"], data["requirements"],
         data.get("max_token", 4096), data.get("top_p", 0.5), data.get("temperature", 1.0),
-        data.get("model_id"),
+        data.get("model_id"), data.get("conversation_starter"),
     ))
     row = cur.fetchone()
     result = _row_to_dict(row, cur.description)

@@ -68,11 +68,11 @@ def sync_oauth_user_to_db(provider_data: dict, provider_name: str):
         else:
             # 2. Insert New User (Trigger handles CLI ID)
             query = """
-                INSERT INTO users (username, email, role, auth_provider, provider_id, is_inactive)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO users (username, email, role, auth_provider, provider_id, is_inactive, max_token, token_used, purchased_token_remaining)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING user_id, username, role;
             """
-            cur.execute(query, (username, email, 'Client', provider_name, p_id, False))
+            cur.execute(query, (username, email, 'Client', provider_name, p_id, False, 50000, 0, 0))
             user_record = cur.fetchone()
 
         conn.commit()

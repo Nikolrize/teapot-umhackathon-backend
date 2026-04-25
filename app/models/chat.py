@@ -14,13 +14,17 @@ from sqlalchemy import UniqueConstraint
 class User(Base):
     __tablename__ = "users"
 
-    user_id      = Column(String(20), primary_key=True)
-    username     = Column(String(50),  unique=True, nullable=False, index=True)
-    email        = Column(String(255), unique=True, nullable=True)
-    avatar_url   = Column(String(500), nullable=True)
-    status       = Column(String(20),  default="offline")
-    created_at   = Column(DateTime(timezone=True), server_default=func.now())
-    last_seen_at = Column(DateTime(timezone=True), nullable=True)
+    user_id                    = Column(String(20), primary_key=True)
+    username                   = Column(String(50),  unique=True, nullable=False, index=True)
+    email                      = Column(String(255), unique=True, nullable=True)
+    avatar_url                 = Column(String(500), nullable=True)
+    status                     = Column(String(20),  default="offline")
+    created_at                 = Column(DateTime(timezone=True), server_default=func.now())
+    last_seen_at               = Column(DateTime(timezone=True), nullable=True)
+    token_used                 = Column(Integer, default=0)
+    max_token                  = Column(Integer, nullable=True)
+    purchased_token_remaining  = Column(Integer, default=0)
+    token_refresh_at           = Column(DateTime(timezone=True), nullable=True)
 
 
 # ---------- Conversation Table --------------------------
