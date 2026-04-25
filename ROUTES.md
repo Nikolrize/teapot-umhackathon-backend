@@ -98,6 +98,7 @@ All fields optional. Updatable: `username`, `email`, `password`, `role` (`Admin`
 | `POST` | `/admin/agents` | Create a custom agent. |
 | `PATCH` | `/admin/agents/{agent_id}` | Update agent settings or assign a model. Default agents cannot be disabled without a model. |
 | `DELETE` | `/admin/agents/{agent_id}` | Delete a custom agent. Default agents cannot be deleted. |
+| `POST` | `/admin/agents/{agent_id}/preview` | Create a temporary preview session to test an agent (see Admin — Agent Preview section). |
 
 ### POST /admin/agents
 ```json
@@ -314,6 +315,7 @@ Each project has one dashboard. It is auto-created on first `GET`.
 | `GET` | `/client/dashboard/{project_id}` | Get the dashboard for a project including all pinned content. Auto-creates dashboard if it doesn't exist yet. |
 | `POST` | `/client/dashboard/{project_id}/add` | Pin an agent reply to the dashboard. |
 | `POST` | `/client/dashboard/content/{content_id}/update` | Edit the text of a pinned dashboard item. |
+| `POST` | `/client/dashboard/content/{content_id}/reorder` | Move a pinned item to a new position. Automatically shifts neighbours. |
 | `POST` | `/client/dashboard/content/{content_id}/delete` | Remove a pinned item from the dashboard. |
 
 ### GET /client/dashboard/{project_id} — Response shape
@@ -348,6 +350,12 @@ Each project has one dashboard. It is auto-created on first `GET`.
 { "content": "string" }
 ```
 
+### POST /client/dashboard/content/{content_id}/reorder
+```json
+{ "new_index": 1 }
+```
+Moves the item to the new position (1-based). Automatically shifts all neighbours. Safe to specify any index—it will be clamped to valid range.
+
 ---
 
 ## Client — Run Agent (one-shot, no session)
@@ -366,6 +374,57 @@ Each project has one dashboard. It is auto-created on first `GET`.
   "brief_description": "string"
 }
 ```
+
+---
+
+## Client — Purchase
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/client/purchase` | Purchase additional tokens (MVP—no payment gateway). |
+| `GET` | `/client/purchase/history/{user_id}` | Get all purchases made by a user. |
+| `GET` | `/client/purchase/token-status/{user_id}` | Get current token breakdown: used, available, remaining, refresh time. |
+
+### POST /client/purchase
+```json
+{
+  "user_id": "string",
+  "purchase_type": "token"
+}
+```
+Returns: `{ "purchase": {...}, "tokens_added": 5000, "purchased_token_remaining": 7500 }`
+
+### GET /client/purchase/token-status/{user_id} — Response
+```json
+{
+  "user_id": "string",
+  "token_used": 1200,
+  "max_token": 50000,
+  "purchased_token_remaining": 5000,
+  "total_available": 55000,
+  "tokens_remaining": 53800,
+  "token_refresh_at": "2026-04-25T17:09:21Z"
+}
+```
+
+---
+
+## Admin — Agent Preview (Testing)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/admin/agents/{agent_id}/preview` | Create a temporary preview session to test an agent as a client would. |
+
+### POST /admin/agents/{agent_id}/preview
+```json
+{
+  "user_id": "string (admin user ID)",
+  "business_name": "string",
+  "business_type": "string",
+  "business_context": "string (optional)"
+}
+```
+Returns: `{ "session_id": "uuid", ...session_details }`
 
 ---
 

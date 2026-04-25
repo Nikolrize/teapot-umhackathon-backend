@@ -265,11 +265,11 @@ async def signup(user: SignupRequest):
         
         # 2. Insert (Trigger handles the ID)
         query = """
-            INSERT INTO users (username, email, password, role)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO users (username, email, password, role, max_token, token_used, purchased_token_remaining)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING user_id, username, role;
         """
-        cur.execute(query, (user.username, user.email, hashed_pwd, assigned_role))
+        cur.execute(query, (user.username, user.email, hashed_pwd, assigned_role, 50000, 0, 0))
         new_user = cur.fetchone()
 
         if not new_user:
