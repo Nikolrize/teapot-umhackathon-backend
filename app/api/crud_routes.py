@@ -57,7 +57,7 @@ class UserUpdate(BaseModel):
         return v
 
 
-@router.patch("/user/update/{search_term}")
+@router.post("/user/update/{search_term}")
 #def update_user_profile(
 #    search_term: str,
 #    update_data: UserUpdate,
@@ -128,7 +128,7 @@ def set_initial_password(user_id: str, data: SetInitialPassword, db: Session = D
     return {"ok": True, "message": "Password created!"}
 
 
-@router.delete("/user/delete/{search_term}")
+@router.post("/user/delete/{search_term}")
 def delete_user(search_term: str, db: Session = Depends(get_db)):
     # 1. Search for the target user (active or already inactive)
     db_user = db.query(User).filter(
@@ -181,7 +181,7 @@ def list_all_users():
     return result
 
 
-@router.patch("/admin/users/{user_id}")
+@router.post("/admin/users/update/{user_id}")
 def admin_update_user(user_id: str, data: AdminUserUpdate):
     updates = {k: v for k, v in data.model_dump(exclude_unset=True).items() if k in _ADMIN_ALLOWED_FIELDS}
     if not updates:

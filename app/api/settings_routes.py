@@ -25,7 +25,7 @@ def get_setting_detail(setting_key: str):
     return setting
 
 
-@router.put("/{setting_key}")
+@router.post("/update/{setting_key}")
 def set_setting(setting_key: str, data: SettingUpsertRequest):
     """
     Create or update a system setting.

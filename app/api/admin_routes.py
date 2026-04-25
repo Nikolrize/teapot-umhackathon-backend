@@ -22,7 +22,7 @@ def get_agent_detail(agent_id: str):
     return agent
 
 
-@router.patch("/{agent_id}")
+@router.post("/update/{agent_id}")
 def update_agent_route(agent_id: str, data: AgentUpdateRequest):
     agent = get_agent(agent_id)
     if not agent:
@@ -52,7 +52,7 @@ def create_custom_agent(data: AgentCreateRequest):
     return create_agent(data.model_dump())
 
 
-@router.delete("/{agent_id}")
+@router.post("/delete/{agent_id}")
 def delete_custom_agent(agent_id: str):
     agent = get_agent(agent_id)
     if not agent:

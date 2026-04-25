@@ -25,7 +25,7 @@ def list_references(user_id: str, agent_id: str):
     return get_user_agent_references(user_id, agent_id)
 
 
-@router.patch("/{reference_id}")
+@router.post("/update/{reference_id}")
 def edit_reference(reference_id: str, data: ReferenceUpdateRequest):
     result = update_reference(reference_id, data.user_id, data.content)
     if not result:
@@ -33,7 +33,7 @@ def edit_reference(reference_id: str, data: ReferenceUpdateRequest):
     return result
 
 
-@router.delete("/{reference_id}")
+@router.post("/delete/{reference_id}")
 def remove_reference(reference_id: str, user_id: str = Query(...)):
     if not delete_reference(reference_id, user_id):
         raise HTTPException(status_code=404, detail="Reference not found")
