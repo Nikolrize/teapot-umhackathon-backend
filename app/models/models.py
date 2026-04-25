@@ -10,13 +10,15 @@ class User(Base):
     user_id = Column(String(20), primary_key=True)
     username = Column(Text, nullable=False)
     email = Column(Text, nullable=False)
-    password = Column(Text, nullable=False)
+    password = Column(Text, nullable=True)
     role = Column(Text, nullable=False) # 'Client' or 'Admin'
     avatar_url = Column(String(500))
     status = Column(String(20), default='offline') # 'online', 'offline', 'away'
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     last_seen_at = Column(DateTime(timezone=True))
-
+    is_inactive = Column(Boolean, nullable=False, default=False)
+    auth_provider = Column(Text, nullable=True)
+    provider_id = Column(Text, nullable=True)
 class Conversation(Base):
     __tablename__ = "conversations"
 

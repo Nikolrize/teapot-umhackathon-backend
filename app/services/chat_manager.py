@@ -6,17 +6,17 @@ class ChatManager:
         # { user_id: websocket }
         self.active: Dict[int, WebSocket] = {}
 
-    async def connect(self, websocket: WebSocket, user_id: int):
+    async def connect(self, websocket: WebSocket, user_id: str):
         await websocket.accept()
         self.active[user_id] = websocket
 
-    def disconnect(self, user_id: int):
+    def disconnect(self, user_id: str):
         self.active.pop(user_id, None)
 
-    def is_online(self, user_id: int) -> bool:
+    def is_online(self, user_id: str) -> bool:
         return user_id in self.active
 
-    async def send_to_user(self, user_id: int, payload: dict):
+    async def send_to_user(self, user_id: str, payload: dict):
         """Send a message to a specific user if they are connected."""
         ws = self.active.get(user_id)
         if ws:
