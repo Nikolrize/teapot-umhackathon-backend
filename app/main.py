@@ -31,6 +31,11 @@ os.environ['AUTHLIB_INSECURE_TRANSPORT'] = 'true'
 
 _PING_INTERVAL = 600  # 10 minutes — safely under the 15-minute sleep threshold
 
+# CORS Origins Configuration
+ALLOWED_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
+if "*" in ALLOWED_ORIGINS:
+    ALLOWED_ORIGINS = ["*"]
+
 
 async def _keep_alive():
     """Pings /health every 10 minutes so the server never hits the idle timeout."""
@@ -58,19 +63,19 @@ async def lifespan(_: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.add_middleware(
     SessionMiddleware,
     secret_key=SECRET_KEY,
     session_cookie="fastapi_session",
     same_site="lax",
     https_only=False,
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
 )
 
 
