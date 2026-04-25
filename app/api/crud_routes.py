@@ -3,24 +3,17 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db_connection import get_db, get_db_connection
 from app.models.models import User, Conversation, Message
-<<<<<<< HEAD
 from app.models.schemas import AdminUserUpdate
-from sqlalchemy import or_
-=======
 from sqlalchemy import or_ , text
->>>>>>> b4d073ff72742aeaafbebe54db4b2613cce6815c
 from datetime import datetime, timezone
 from sqlalchemy.exc import SQLAlchemyError
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional
 from app.api.auth_routes import hash_password
-<<<<<<< HEAD
-=======
 from app.core.security import get_current_user
 import psycopg2.extras
 
 # from app.models.schemas import UserUpdate, MessageUpdate
->>>>>>> b4d073ff72742aeaafbebe54db4b2613cce6815c
 
 router = APIRouter(prefix="/api", tags=["CRUD Operations"])
 
@@ -62,15 +55,12 @@ class UserUpdate(BaseModel):
 
 
 @router.patch("/user/update/{search_term}")
-<<<<<<< HEAD
-def update_user_profile(
-    search_term: str,
-    update_data: UserUpdate,
-    db: Session = Depends(get_db)
-):
-=======
+#def update_user_profile(
+#    search_term: str,
+#    update_data: UserUpdate,
+#    db: Session = Depends(get_db)
+#):
 def update_user_profile(search_term: str, update_data: UserUpdate, db: Session = Depends(get_db)):
->>>>>>> b4d073ff72742aeaafbebe54db4b2613cce6815c
     db_user = db.query(User).filter(
         or_(User.user_id == search_term, User.username == search_term, User.email == search_term)
     ).first()
@@ -78,8 +68,6 @@ def update_user_profile(search_term: str, update_data: UserUpdate, db: Session =
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-<<<<<<< HEAD
-=======
     # NEW: Catch OAuth users who haven't set a password yet
     if db_user.password is None:
         raise HTTPException(
@@ -88,7 +76,6 @@ def update_user_profile(search_term: str, update_data: UserUpdate, db: Session =
         )
 
     # Proceed with updates if they have a password
->>>>>>> b4d073ff72742aeaafbebe54db4b2613cce6815c
     if update_data.username:
         db_user.username = update_data.username
     if update_data.email:
@@ -140,10 +127,7 @@ def set_initial_password(user_id: str, data: SetInitialPassword, db: Session = D
 
 @router.delete("/user/delete/{search_term}")
 def delete_user(search_term: str, db: Session = Depends(get_db)):
-<<<<<<< HEAD
-=======
     # 1. Search for the target user (active or already inactive)
->>>>>>> b4d073ff72742aeaafbebe54db4b2613cce6815c
     db_user = db.query(User).filter(
         or_(
             User.user_id == search_term,
@@ -155,20 +139,16 @@ def delete_user(search_term: str, db: Session = Depends(get_db)):
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-<<<<<<< HEAD
-=======
     # 2. Check if they are already deleted to avoid redundant commits
     if db_user.is_inactive == True:
         return {"ok": True, "message": "User is already deactivated."}
     
     # 3. Perform Soft Delete
->>>>>>> b4d073ff72742aeaafbebe54db4b2613cce6815c
     try:
         db_user.is_inactive = True
         db.commit()
     except SQLAlchemyError:
         db.rollback()
-<<<<<<< HEAD
         raise HTTPException(
             status_code=400,
             detail="Cannot delete user. They may have active messages or conversations linked to them."
@@ -227,14 +207,6 @@ def admin_update_user(user_id: str, data: AdminUserUpdate):
     cur.close()
     conn.close()
     return result
-=======
-        print(f"Delete Error: {e}")
-        raise HTTPException(
-            status_code=500, 
-            detail="Failed to deactivate user account."
-        )
-        
-    return {"ok": True, "message": f"User {search_term} has been deactivated."}
 
 # MOCK_MASTER_ADMIN = {
 #     "id": "ADM0004",
@@ -330,4 +302,3 @@ async def admin_create_user(
         raise HTTPException(status_code=500, detail="Internal Server Error")
     finally:
         db.close()
->>>>>>> b4d073ff72742aeaafbebe54db4b2613cce6815c
