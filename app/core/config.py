@@ -2,6 +2,7 @@
 from starlette.config import Config
 import cloudinary
 
+
 config = Config(".env")
 
 DATABASE_URL = config("DATABASE_URL")

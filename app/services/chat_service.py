@@ -24,14 +24,13 @@ def search_users(db: Session, query: str, my_user_id: str) -> list[dict]:
 
     users = (
         db.query(User)
-        .filter(User.username.ilike(f"%{query}%"), User.user_id != my_user_id)
+        .filter(User.user_id.ilike(f"%{query}%"), User.user_id != my_user_id)
         .limit(10)
         .all()
     )
 
     results = []
     for u in users:
-        # Auto-create conversation if none exists
         conv = get_or_create_conversation(db, my_user_id, u.user_id)
 
         results.append({
@@ -257,7 +256,8 @@ ALLOWED_TYPES = {
     "application/msword": "docx"
 }
 
-# File Uploadation
+# -- File Uploadation ----------------------------------------------------------
+
 def upload_file(db: Session, conversation_id: str, current_user_id: str, file: UploadFile) -> dict:
     """Save the file, create a placeholder message, attach the file to it, and return payload."""
     if file.content_type not in ALLOWED_TYPES:
@@ -288,7 +288,8 @@ def upload_file(db: Session, conversation_id: str, current_user_id: str, file: U
         }
     }
 
-# Save file attachment to database and file system
+# -- Save file attachment to database and file system --------------------------
+
 def save_attachment(db: Session, message_id: UUID, file: UploadFile) -> MessageAttachment:
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(status_code=400, detail="Only images, CSVs, PDFs, PPTXs, TXTs, DOCXs are allowed")
