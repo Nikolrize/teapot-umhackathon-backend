@@ -20,6 +20,7 @@ from app.api.dashboard_routes import router as dashboard_router
 from app.api.model_routes import router as model_router
 from app.api.file_routes import router as file_router
 from app.api.generation_routes import router as generation_router
+from app.api import leads_routes as leads_overview
 
 os.environ['AUTHLIB_INSECURE_TRANSPORT'] = 'true'
 
@@ -61,3 +62,4 @@ app.include_router(admin_router, prefix="/admin")
 app.include_router(model_router, prefix="/admin")
 app.include_router(crud_routes)
 app.include_router(chat_router)
+app.include_router(leads_overview.router)
