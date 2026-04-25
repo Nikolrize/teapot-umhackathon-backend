@@ -225,13 +225,18 @@ ALLOWED_TYPES = {
     "image/gif": "image",  "image/webp": "image",
     "text/csv": "csv",     "application/vnd.ms-excel": "csv",
     "application/pdf": "pdf",
+    "application/vnd.ms-powerpoint": "pptx",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+    "text/plain": "txt", 
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/msword": "docx"
 }
 
 # File Uploadation
 def upload_file(db: Session, conversation_id: str, current_user_id: str, file: UploadFile) -> dict:
     """Save the file, create a placeholder message, attach the file to it, and return payload."""
     if file.content_type not in ALLOWED_TYPES:
-        raise HTTPException(status_code=400, detail="Only images, CSVs, and PDFs are allowed")
+        raise HTTPException(status_code=400, detail="Only images, CSVs, PDFs, PPTXs, TXTs, DOCXs are allowed")
 
     user = get_user(db, current_user_id)
     if not user:
@@ -261,7 +266,7 @@ def upload_file(db: Session, conversation_id: str, current_user_id: str, file: U
 # Save file attachment to database and file system
 def save_attachment(db: Session, message_id: UUID, file: UploadFile) -> MessageAttachment:
     if file.content_type not in ALLOWED_TYPES:
-        raise HTTPException(status_code=400, detail="Only images, CSVs, and PDFs are allowed")
+        raise HTTPException(status_code=400, detail="Only images, CSVs, PDFs, PPTXs, TXTs, DOCXs are allowed")
 
     file_type = ALLOWED_TYPES[file.content_type]
 
