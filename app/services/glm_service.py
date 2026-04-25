@@ -42,10 +42,7 @@ def _call_gemini_session(
     api_key: str, model_name: str, system: str,
     messages: list, max_tokens: int, temperature: float, top_p: float,
 ) -> tuple[str, int]:
-    client = google_genai.Client(
-        api_key=api_key,
-        http_options=google_types.HttpOptions(timeout=25),
-    )
+    client = google_genai.Client(api_key=api_key)
     history, last_message = _to_gemini_history(messages)
 
     contents = [
