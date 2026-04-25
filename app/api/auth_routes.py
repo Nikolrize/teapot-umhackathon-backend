@@ -361,3 +361,6 @@ async def login(payload: LoginSchema):
         # 7. CRITICAL: Always close raw psycopg2 connections manually
         if 'cur' in locals() and cur: cur.close()
         if conn: conn.close()
+
+
+    #test
