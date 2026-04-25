@@ -90,6 +90,95 @@ def get_messages(
         for m in messages
     ]
 
+#------ Message request models -------------------------------------------------------
+
+class SendMessageRequest(BaseModel):
+    content: str             
+
+class ReplyMessageRequest(BaseModel):
+    content: str
+    reply_to_id: UUID       
+
+# -- Route: Send normal message -------------------------------------------------------
+
+@router.post("/conversations/{conversation_id}/messages")
+async def send_message(
+    conversation_id: str,
+    current_user_id: str,
+    req: SendMessageRequest,
+    db: Session = Depends(get_db)
+):
+    user = svc.get_user(db, current_user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    msg = svc.save_message(db, conversation_id, user, req.content, reply_to_id=None)
+
+    payload = {
+        "id": str(msg.message_id),
+        "conversation_id": conversation_id,
+        "sender_id": current_user_id,
+        "sender_username": user.username,
+        "content": msg.content,
+        "created_at": msg.created_at.isoformat(),
+        "reply_to_id": None,
+        "attachment": None
+    }
+
+    ws_payload = {"type": "new_message", **payload}
+    await chat_manager.send_to_user(current_user_id, ws_payload)
+
+    conv = db.query(Conversation).filter(Conversation.conver_id == conversation_id).first()
+    if conv:
+        recipient_id = conv.user_b_id if conv.user_a_id == current_user_id else conv.user_a_id
+        await chat_manager.send_to_user(recipient_id, ws_payload)
+
+    return payload
+
+
+# -- Route: Reply to a message -------------------------------------------------------
+
+@router.post("/conversations/{conversation_id}/messages/{message_id}/reply")
+async def reply_message(
+    conversation_id: str,
+    message_id: str,          # the message being replied to (from path)
+    current_user_id: str,
+    req: ReplyMessageRequest,
+    db: Session = Depends(get_db)
+):
+    user = svc.get_user(db, current_user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Validate the message being replied to exists
+    from app.models.chat import Message
+    original = db.query(Message).filter(Message.message_id == message_id).first()
+    if not original:
+        raise HTTPException(status_code=404, detail="Message not found")
+
+    msg = svc.save_message(db, conversation_id, user, req.content, reply_to_id=message_id)
+
+    payload = {
+        "id": str(msg.message_id),
+        "conversation_id": conversation_id,
+        "sender_id": current_user_id,
+        "sender_username": user.username,
+        "content": msg.content,
+        "created_at": msg.created_at.isoformat(),
+        "reply_to_id": str(message_id),
+        "attachment": None
+    }
+
+    ws_payload = {"type": "new_message", **payload}
+    await chat_manager.send_to_user(current_user_id, ws_payload)
+
+    conv = db.query(Conversation).filter(Conversation.conver_id == conversation_id).first()
+    if conv:
+        recipient_id = conv.user_b_id if conv.user_a_id == current_user_id else conv.user_a_id
+        await chat_manager.send_to_user(recipient_id, ws_payload)
+
+    return payload
+
 
 # -- Route: Delete message -----------------------------------------------------
 

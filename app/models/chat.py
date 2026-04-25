@@ -8,6 +8,8 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from app.db_connection import Base
 from sqlalchemy import UniqueConstraint
+import uuid
+from pydantic import BaseModel
 
 
 # ----------------- User Table ----------------------------------------
@@ -27,7 +29,7 @@ class User(Base):
     token_refresh_at           = Column(DateTime(timezone=True), nullable=True)
 
 
-# ---------- Conversation Table --------------------------
+# ---------- Conversation Table ----------------------------------------
 class Conversation(Base):
     __tablename__ = "conversations"
 
@@ -68,7 +70,7 @@ class ReadReceipt(Base):
     last_read_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
-#------ Message attachment table ---------------
+#------ Message attachment table -------------------------------------------------------
 class MessageAttachment(Base):
     __tablename__ = "message_attachments"
 
@@ -80,5 +82,8 @@ class MessageAttachment(Base):
     file_size     = Column(Integer, nullable=True)
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
     message       = relationship("Message", back_populates="attachments")
+
+
+
 
 

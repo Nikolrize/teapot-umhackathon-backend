@@ -19,6 +19,7 @@ class User(Base):
     is_inactive = Column(Boolean, nullable=False, default=False)
     auth_provider = Column(Text, nullable=True)
     provider_id = Column(Text, nullable=True)
+    
 class Conversation(Base):
     __tablename__ = "conversations"
 
