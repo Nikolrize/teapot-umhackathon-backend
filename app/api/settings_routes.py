@@ -9,6 +9,7 @@ router = APIRouter(prefix="/settings")
 class SettingUpsertRequest(BaseModel):
     setting_value: int
     price: Optional[str] = None
+    name: Optional[str] = None
 
 
 @router.get("")
@@ -31,5 +32,6 @@ def set_setting(setting_key: str, data: SettingUpsertRequest):
     Create or update a system setting.
     Common keys:
       - token_pack  → setting_value = tokens per purchase, price = display price (e.g. 'RM 9.90')
+    Provide `name` to give the setting a human-readable label (e.g. 'Starter Pack').
     """
-    return upsert_setting(setting_key, data.setting_value, data.price)
+    return upsert_setting(setting_key, data.setting_value, data.price, data.name)

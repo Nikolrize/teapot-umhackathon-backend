@@ -2,12 +2,15 @@ import json
 from anthropic import Anthropic
 from google import genai as google_genai
 from google.genai import types as google_types
-from app.core.config import ZAI_API_KEY
+from app.core.config import ZAI_API_KEY, GEMINI_API_KEY
 
-_DEFAULT_API_KEY      = ZAI_API_KEY
-_DEFAULT_MODEL        = "ilmu-glm-5.1"
+_DEFAULT_PROVIDER     = "gemini"
+_DEFAULT_GEMINI_KEY   = GEMINI_API_KEY
 _DEFAULT_GEMINI_MODEL = "models/gemini-2.5-flash"
-_DEFAULT_PROVIDER     = "ilmu"
+
+# Kept for agents that still have ilmu configured
+_DEFAULT_ILMU_KEY   = ZAI_API_KEY
+_DEFAULT_ILMU_MODEL = "ilmu-glm-5.1"
 
 _ANTHROPIC_BASE_URLS: dict[str, str] = {
     "ilmu": "https://api.ilmu.ai/anthropic",
@@ -17,8 +20,8 @@ _ANTHROPIC_BASE_URLS: dict[str, str] = {
 # ── SDK clients ───────────────────────────────────────────────────────────────
 
 def _anthropic_client(api_key: str = None, model_provider: str = None) -> Anthropic:
-    base_url = _ANTHROPIC_BASE_URLS.get(model_provider or _DEFAULT_PROVIDER)
-    return Anthropic(api_key=api_key or _DEFAULT_API_KEY, base_url=base_url)
+    base_url = _ANTHROPIC_BASE_URLS.get(model_provider or "ilmu")
+    return Anthropic(api_key=api_key or _DEFAULT_ILMU_KEY, base_url=base_url, timeout=25.0)
 
 
 # ── Gemini helpers ────────────────────────────────────────────────────────────
@@ -39,7 +42,10 @@ def _call_gemini_session(
     api_key: str, model_name: str, system: str,
     messages: list, max_tokens: int, temperature: float, top_p: float,
 ) -> tuple[str, int]:
-    client = google_genai.Client(api_key=api_key)
+    client = google_genai.Client(
+        api_key=api_key,
+        http_options=google_types.HttpOptions(timeout=25),
+    )
     history, last_message = _to_gemini_history(messages)
 
     contents = [
@@ -107,13 +113,13 @@ def call_glm(
 
     if provider == "gemini":
         text, _ = _call_gemini_session(
-            api_key or _DEFAULT_API_KEY, model_name or _DEFAULT_MODEL,
+            api_key or _DEFAULT_GEMINI_KEY, model_name or _DEFAULT_GEMINI_MODEL,
             requirements, messages, max_tokens, temperature, top_p,
         )
         return text
 
     response = _anthropic_client(api_key, provider).messages.create(
-        model=model_name or _DEFAULT_MODEL,
+        model=model_name or _DEFAULT_ILMU_MODEL,
         max_tokens=max_tokens, system=requirements,
         messages=messages, temperature=temperature, top_p=top_p,
     )
@@ -135,13 +141,13 @@ def call_glm_session(
 
     if provider == "gemini":
         return _call_gemini_session(
-            api_key or _DEFAULT_API_KEY,
+            api_key or _DEFAULT_GEMINI_KEY,
             model_name or _DEFAULT_GEMINI_MODEL,
             requirements, messages, max_tokens, temperature, top_p,
         )
 
     response = _anthropic_client(api_key, provider).messages.create(
-        model=model_name or _DEFAULT_MODEL,
+        model=model_name or _DEFAULT_ILMU_MODEL,
         max_tokens=max_tokens, system=requirements,
         messages=messages, temperature=temperature, top_p=top_p,
     )

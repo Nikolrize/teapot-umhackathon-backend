@@ -26,6 +26,7 @@ from app.core.config import SECRET_KEY
 from app.services.agent_service import init_agents_table
 from app.services.project_service import init_project_tables
 from app.services.reference_service import init_reference_table
+from app.services.purchase_service import init_settings_table
 
 os.environ['AUTHLIB_INSECURE_TRANSPORT'] = 'true'
 
@@ -77,6 +78,7 @@ async def lifespan(_: FastAPI):
     init_agents_table()
     init_project_tables()
     init_reference_table()
+    init_settings_table()
     task = asyncio.create_task(_keep_alive())
     yield
     task.cancel()
