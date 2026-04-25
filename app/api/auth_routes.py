@@ -17,6 +17,9 @@ from .auth_utils import create_access_token
 from datetime import datetime, timedelta, timezone
 from jose import jwt
 from sqlalchemy import text
+from app.core.security import get_current_user
+
+
 router = APIRouter(prefix="/auth")
 
 def get_db_connection():
@@ -331,7 +334,17 @@ async def login(payload: LoginSchema):
         # 5. Verify Password
         if not verify_password(payload.password, user_record['password']):
             raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        update_status_query = """
+            UPDATE users 
+            SET status = 'online', 
+                last_seen_at = CURRENT_TIMESTAMP 
+            WHERE user_id = %s;
+        """
 
+
+        cur.execute(update_status_query, (user_record['user_id'],))
+        conn.commit()
         # 6. Generate Token
         access_token = create_access_token(
             data={
@@ -348,7 +361,8 @@ async def login(payload: LoginSchema):
             "user": {
                 "id": user_record['user_id'], 
                 "username": user_record['username'],
-                "role": user_record['role']
+                "role": user_record['role'],
+                "user_status": "online" # Included in response for the frontend
             }
         }
 
@@ -362,5 +376,32 @@ async def login(payload: LoginSchema):
         if 'cur' in locals() and cur: cur.close()
         if conn: conn.close()
 
+# MOCK_MASTER_ADMIN = {
+#     "id": "ADM0004",
+#     "username": "Yagoo",
+#     "role": "Master Admin"
+# }
 
-    #test
+# # This is a dummy function to replace your real auth for this test
+# async def get_mock_user():
+#     return MOCK_MASTER_ADMIN
+
+@router.post("/logout")
+async def logout(current_user: dict = Depends(get_current_user)):
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        query = "UPDATE users SET status = 'offline' WHERE user_id = %s"
+        cur.execute(query, (current_user['id'],))
+        conn.commit()
+
+        return {"status": "success", "message": "Logged out successfully"}
+    
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"Logout Error: {e}")
+        raise HTTPException(status_code=500, detail="Could not log out")
+    finally:
+        if conn: conn.close()
