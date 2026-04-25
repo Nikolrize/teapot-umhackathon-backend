@@ -8,10 +8,25 @@ def _row_to_dict(row, description):
 
 # ── System settings ────────────────────────────────────────────────────────────
 
+def init_settings_table() -> None:
+    """Add the `name` column to system_settings if it doesn't exist yet."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        ALTER TABLE system_settings
+        ADD COLUMN IF NOT EXISTS name VARCHAR(255)
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
 def get_all_settings() -> list:
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT setting_key, setting_value, price FROM system_settings ORDER BY setting_key")
+    cur.execute(
+        "SELECT setting_key, setting_value, price, name FROM system_settings ORDER BY setting_key"
+    )
     result = [_row_to_dict(row, cur.description) for row in cur.fetchall()]
     cur.close()
     conn.close()
@@ -22,7 +37,7 @@ def get_setting(key: str) -> dict | None:
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
-        "SELECT setting_key, setting_value, price FROM system_settings WHERE setting_key = %s",
+        "SELECT setting_key, setting_value, price, name FROM system_settings WHERE setting_key = %s",
         (key,),
     )
     row = cur.fetchone()
@@ -32,18 +47,19 @@ def get_setting(key: str) -> dict | None:
     return result
 
 
-def upsert_setting(key: str, value: int, price: str | None = None) -> dict:
-    """Create or update a system setting."""
+def upsert_setting(key: str, value: int, price: str | None = None, name: str | None = None) -> dict:
+    """Create or update a system setting. Existing name is preserved when name is not provided."""
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO system_settings (setting_key, setting_value, price)
-        VALUES (%s, %s, %s)
+        INSERT INTO system_settings (setting_key, setting_value, price, name)
+        VALUES (%s, %s, %s, %s)
         ON CONFLICT (setting_key) DO UPDATE
             SET setting_value = EXCLUDED.setting_value,
-                price         = EXCLUDED.price
-        RETURNING setting_key, setting_value, price
-    """, (key, value, price))
+                price         = EXCLUDED.price,
+                name          = COALESCE(EXCLUDED.name, system_settings.name)
+        RETURNING setting_key, setting_value, price, name
+    """, (key, value, price, name))
     result = _row_to_dict(cur.fetchone(), cur.description)
     conn.commit()
     cur.close()

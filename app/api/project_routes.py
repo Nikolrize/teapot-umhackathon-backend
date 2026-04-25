@@ -166,9 +166,10 @@ def chat(session_id: str, data: ChatRequest):
             model_provider=model["model_provider"] if model else None,
         )
     except Exception as exc:
+        print(f"[chat] AI call failed: {type(exc).__name__}: {exc}")
         raise HTTPException(
-            status_code=502,
-            detail=f"Model provider request failed: {str(exc)}",
+            status_code=503,
+            detail=f"AI service unavailable — {type(exc).__name__}: {exc}",
         ) from exc
 
     reply_msg = record_message(session_id, reply, "reply")
