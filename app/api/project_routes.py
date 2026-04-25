@@ -148,6 +148,8 @@ def chat(session_id: str, data: ChatRequest):
 
     # ── Token gate ─────────────────────────────────────────────────────────────
     token_info = check_and_refresh(session["user_id"])
+    if not token_info:
+        raise HTTPException(status_code=404, detail="User not found for this session")
     if not is_within_limit(token_info):
         raise HTTPException(
             status_code=402,
@@ -155,13 +157,20 @@ def chat(session_id: str, data: ChatRequest):
         )
 
     record_message(session_id, data.message, "prompt")
-    reply, tokens_used = call_glm_session(
-        session["max_token"], system_prompt, messages,
-        session["temperature"], session["top_p"],
-        api_key=model["api_key"] if model else None,
-        model_name=model["model_name"] if model else None,
-        model_provider=model["model_provider"] if model else None,
-    )
+    try:
+        reply, tokens_used = call_glm_session(
+            session["max_token"], system_prompt, messages,
+            session["temperature"], session["top_p"],
+            api_key=model["api_key"] if model else None,
+            model_name=model["model_name"] if model else None,
+            model_provider=model["model_provider"] if model else None,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Model provider request failed: {str(exc)}",
+        ) from exc
+
     reply_msg = record_message(session_id, reply, "reply")
     consume_tokens(session["user_id"], tokens_used)
 

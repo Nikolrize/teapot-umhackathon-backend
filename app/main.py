@@ -32,9 +32,31 @@ os.environ['AUTHLIB_INSECURE_TRANSPORT'] = 'true'
 _PING_INTERVAL = 600  # 10 minutes — safely under the 15-minute sleep threshold
 
 # CORS Origins Configuration
-ALLOWED_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
-if "*" in ALLOWED_ORIGINS:
-    ALLOWED_ORIGINS = ["*"]
+def _parse_allowed_origins() -> list[str]:
+    """
+    Parse CORS origins from env and keep localhost enabled by default.
+    This avoids browser CORS failures during local frontend development.
+    """
+    default_origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+    raw = os.getenv("CORS_ORIGINS", "")
+    if not raw.strip():
+        return default_origins
+
+    parsed = [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
+    if "*" in parsed:
+        # With credentials enabled, explicit origins are safer than wildcard.
+        return default_origins
+
+    for origin in default_origins:
+        if origin not in parsed:
+            parsed.append(origin)
+    return parsed
+
+
+ALLOWED_ORIGINS = _parse_allowed_origins()
 
 
 async def _keep_alive():
