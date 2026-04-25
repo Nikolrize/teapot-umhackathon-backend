@@ -1,5 +1,6 @@
 # Configs
 from starlette.config import Config
+import cloudinary
 
 config = Config(".env")
 
@@ -11,3 +12,8 @@ GOOGLE_CLIENT_SECRET = config("GOOGLE_CLIENT_SECRET")
 SECRET_KEY = config("SECRET_KEY")
 ZAI_API_KEY = config("ZAI_API_KEY")
 GEMINI_API_KEY = config("GEMINI_API_KEY")
+
+CLOUDINARY_CLOUD_NAME = config("CLOUDINARY_CLOUD_NAME")
+CLOUDINARY_API_KEY = config("CLOUDINARY_API_KEY")
+CLOUDINARY_API_SECRET =config("CLOUDINARY_API_SECRET")
+

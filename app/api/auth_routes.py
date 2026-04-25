@@ -17,6 +17,9 @@ from .auth_utils import create_access_token
 from datetime import datetime, timedelta, timezone
 from jose import jwt
 from sqlalchemy import text
+from app.core.security import get_current_user
+
+
 router = APIRouter(prefix="/auth")
 
 def get_db_connection():
@@ -68,11 +71,11 @@ def sync_oauth_user_to_db(provider_data: dict, provider_name: str):
         else:
             # 2. Insert New User (Trigger handles CLI ID)
             query = """
-                INSERT INTO users (username, email, role, auth_provider, provider_id, is_inactive)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO users (username, email, role, auth_provider, provider_id, is_inactive, max_token, token_used, purchased_token_remaining)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING user_id, username, role;
             """
-            cur.execute(query, (username, email, 'Client', provider_name, p_id, False))
+            cur.execute(query, (username, email, 'Client', provider_name, p_id, False, 50000, 0, 0))
             user_record = cur.fetchone()
 
         conn.commit()
@@ -265,11 +268,11 @@ async def signup(user: SignupRequest):
         
         # 2. Insert (Trigger handles the ID)
         query = """
-            INSERT INTO users (username, email, password, role)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO users (username, email, password, role, max_token, token_used, purchased_token_remaining)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING user_id, username, role;
         """
-        cur.execute(query, (user.username, user.email, hashed_pwd, assigned_role))
+        cur.execute(query, (user.username, user.email, hashed_pwd, assigned_role, 50000, 0, 0))
         new_user = cur.fetchone()
 
         if not new_user:
@@ -331,7 +334,17 @@ async def login(payload: LoginSchema):
         # 5. Verify Password
         if not verify_password(payload.password, user_record['password']):
             raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        update_status_query = """
+            UPDATE users 
+            SET status = 'online', 
+                last_seen_at = CURRENT_TIMESTAMP 
+            WHERE user_id = %s;
+        """
 
+
+        cur.execute(update_status_query, (user_record['user_id'],))
+        conn.commit()
         # 6. Generate Token
         access_token = create_access_token(
             data={
@@ -348,7 +361,8 @@ async def login(payload: LoginSchema):
             "user": {
                 "id": user_record['user_id'], 
                 "username": user_record['username'],
-                "role": user_record['role']
+                "role": user_record['role'],
+                "user_status": "online" # Included in response for the frontend
             }
         }
 
@@ -362,5 +376,32 @@ async def login(payload: LoginSchema):
         if 'cur' in locals() and cur: cur.close()
         if conn: conn.close()
 
+# MOCK_MASTER_ADMIN = {
+#     "id": "ADM0004",
+#     "username": "Yagoo",
+#     "role": "Master Admin"
+# }
 
-    #test
+# # This is a dummy function to replace your real auth for this test
+# async def get_mock_user():
+#     return MOCK_MASTER_ADMIN
+
+@router.post("/logout")
+async def logout(current_user: dict = Depends(get_current_user)):
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        query = "UPDATE users SET status = 'offline' WHERE user_id = %s"
+        cur.execute(query, (current_user['id'],))
+        conn.commit()
+
+        return {"status": "success", "message": "Logged out successfully"}
+    
+    except Exception as e:
+        if conn: conn.rollback()
+        print(f"Logout Error: {e}")
+        raise HTTPException(status_code=500, detail="Could not log out")
+    finally:
+        if conn: conn.close()

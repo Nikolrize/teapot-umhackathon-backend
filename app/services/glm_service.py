@@ -4,14 +4,11 @@ from google import genai as google_genai
 from google.genai import types as google_types
 from app.core.config import ZAI_API_KEY
 
-_DEFAULT_API_KEY  = ZAI_API_KEY
-_DEFAULT_MODEL    = "ilmu-glm-5.1"
+_DEFAULT_API_KEY      = ZAI_API_KEY
+_DEFAULT_MODEL        = "ilmu-glm-5.1"
 _DEFAULT_GEMINI_MODEL = "models/gemini-2.5-flash"
-_DEFAULT_PROVIDER = "ilmu"
+_DEFAULT_PROVIDER     = "ilmu"
 
-# Developer-maintained: Anthropic-SDK-compatible providers and their base URLs.
-# Gemini is handled separately via its own SDK — no entry needed here.
-# Add a new entry when onboarding a new Anthropic-compatible provider.
 _ANTHROPIC_BASE_URLS: dict[str, str] = {
     "ilmu": "https://api.ilmu.ai/anthropic",
 }
@@ -27,10 +24,6 @@ def _anthropic_client(api_key: str = None, model_provider: str = None) -> Anthro
 # ── Gemini helpers ────────────────────────────────────────────────────────────
 
 def _to_gemini_history(messages: list) -> tuple[list, str]:
-    """
-    Split the messages list into chat history (all but last) and the final user
-    message. Converts Anthropic role names to Gemini role names.
-    """
     history = [
         {
             "role":  "user" if m["role"] == "user" else "model",
@@ -45,23 +38,15 @@ def _to_gemini_history(messages: list) -> tuple[list, str]:
 def _call_gemini_session(
     api_key: str, model_name: str, system: str,
     messages: list, max_tokens: int, temperature: float, top_p: float,
-) -> str:
-    client   = google_genai.Client(api_key=api_key)
+) -> tuple[str, int]:
+    client = google_genai.Client(api_key=api_key)
     history, last_message = _to_gemini_history(messages)
 
     contents = [
-        google_types.Content(
-            role=m["role"],
-            parts=[google_types.Part(text=m["parts"][0])],
-        )
+        google_types.Content(role=m["role"], parts=[google_types.Part(text=m["parts"][0])])
         for m in history
     ]
-    contents.append(
-        google_types.Content(
-            role="user",
-            parts=[google_types.Part(text=last_message)],
-        )
-    )
+    contents.append(google_types.Content(role="user", parts=[google_types.Part(text=last_message)]))
 
     response = client.models.generate_content(
         model=model_name or _DEFAULT_GEMINI_MODEL,
@@ -73,7 +58,11 @@ def _call_gemini_session(
             top_p=top_p,
         ),
     )
-    return response.text
+    try:
+        tokens = response.usage_metadata.total_token_count or 0
+    except Exception:
+        tokens = 0
+    return response.text, tokens
 
 
 # ── Public interface ──────────────────────────────────────────────────────────
@@ -82,8 +71,9 @@ def call_glm(
     max_tokens, requirements, context, temperature, top_p,
     prev_messages=None, previous_output=None,
     api_key: str = None, model_name: str = None, model_provider: str = None,
-):
-    provider  = model_provider or _DEFAULT_PROVIDER
+) -> str:
+    """One-shot call. Returns reply text only (no user context for token tracking)."""
+    provider    = model_provider or _DEFAULT_PROVIDER
     temperature = float(temperature)
     top_p       = float(top_p)
 
@@ -115,11 +105,11 @@ def call_glm(
         ]
 
     if provider == "gemini":
-        return _call_gemini_session(
-            api_key or _DEFAULT_API_KEY,
-            model_name or _DEFAULT_MODEL,
+        text, _ = _call_gemini_session(
+            api_key or _DEFAULT_API_KEY, model_name or _DEFAULT_MODEL,
             requirements, messages, max_tokens, temperature, top_p,
         )
+        return text
 
     response = _anthropic_client(api_key, provider).messages.create(
         model=model_name or _DEFAULT_MODEL,
@@ -132,10 +122,10 @@ def call_glm(
 def call_glm_session(
     max_tokens, requirements, messages: list, temperature, top_p,
     api_key: str = None, model_name: str = None, model_provider: str = None,
-):
+) -> tuple[str, int]:
     """
-    Multi-turn chat dispatcher.
-    Routes to the Gemini SDK or the Anthropic-compatible SDK based on model_provider.
+    Multi-turn chat. Returns (reply_text, tokens_used).
+    Tokens are actual input+output counts from the API for accurate billing.
     """
     provider    = model_provider or _DEFAULT_PROVIDER
     temperature = float(temperature)
@@ -144,7 +134,7 @@ def call_glm_session(
     if provider == "gemini":
         return _call_gemini_session(
             api_key or _DEFAULT_API_KEY,
-            model_name or _DEFAULT_MODEL,
+            model_name or _DEFAULT_GEMINI_MODEL,
             requirements, messages, max_tokens, temperature, top_p,
         )
 
@@ -153,4 +143,8 @@ def call_glm_session(
         max_tokens=max_tokens, system=requirements,
         messages=messages, temperature=temperature, top_p=top_p,
     )
-    return response.content[0].text
+    try:
+        tokens = response.usage.input_tokens + response.usage.output_tokens
+    except Exception:
+        tokens = 0
+    return response.content[0].text, tokens

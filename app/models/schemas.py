@@ -34,6 +34,7 @@ class AgentUpdateRequest(BaseModel):
     temperature: Optional[float] = None
     top_p: Optional[float] = None
     model_id: Optional[str] = None
+    conversation_starter: Optional[str] = None
 
 
 class AgentCreateRequest(BaseModel):
@@ -44,6 +45,7 @@ class AgentCreateRequest(BaseModel):
     temperature: float = 1.0
     top_p: float = 0.5
     model_id: Optional[str] = None
+    conversation_starter: Optional[str] = None
 
 
 class AgentResponse(BaseModel):

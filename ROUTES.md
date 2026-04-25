@@ -38,11 +38,11 @@ Returns: `{ "access_token": "...", "token_type": "bearer", "user": { "username",
 | Method | Path | Purpose |
 |--------|------|---------|
 | `GET` | `/api/user/get/{search_term}` | Get a user by `user_id`, `username`, or `email`. |
-| `PATCH` | `/api/user/update/{search_term}` | Update own `username`, `email`, or `password`. |
+| `POST` | `/api/user/update/{search_term}` | Update own `username`, `email`, or `password`. |
 | `POST` | `/api/user/set-initial-password/{user_id}` | Set a password for OAuth users who signed in via GitHub/Google. |
-| `DELETE` | `/api/user/delete/{search_term}` | Soft-deactivate own account. |
+| `POST` | `/api/user/delete/{search_term}` | Soft-deactivate own account. |
 
-### PATCH /api/user/update/{search_term}
+### POST /api/user/update/{search_term}
 ```json
 {
   "username": "string (optional)",
@@ -63,10 +63,10 @@ Returns: `{ "access_token": "...", "token_type": "bearer", "user": { "username",
 | Method | Path | Purpose |
 |--------|------|---------|
 | `GET` | `/api/admin/users` | List all users with full profile. |
-| `PATCH` | `/api/admin/users/{user_id}` | Update any user field (role, token limits, status, etc). |
+| `POST` | `/api/admin/users/update/{user_id}` | Update any user field (role, token limits, status, etc). |
 | `POST` | `/api/admin/users/create` | Create a new user account directly (no invite code needed). |
 
-### PATCH /api/admin/users/{user_id}
+### POST /api/admin/users/update/{user_id}
 All fields optional. Updatable: `username`, `email`, `password`, `role` (`Admin`\|`Client`), `avatar_url`, `status`, `token_used`, `max_token`.
 ```json
 {
@@ -96,8 +96,9 @@ All fields optional. Updatable: `username`, `email`, `password`, `role` (`Admin`
 | `GET` | `/admin/agents/{agent_id}` | Get a single agent's details. |
 | `GET` | `/admin/agents/available-models` | List configured models to populate the model dropdown when creating an agent. |
 | `POST` | `/admin/agents` | Create a custom agent. |
-| `PATCH` | `/admin/agents/{agent_id}` | Update agent settings or assign a model. Default agents cannot be disabled without a model. |
-| `DELETE` | `/admin/agents/{agent_id}` | Delete a custom agent. Default agents cannot be deleted. |
+| `POST` | `/admin/agents/update/{agent_id}` | Update agent settings or assign a model. Default agents cannot be disabled without a model. |
+| `POST` | `/admin/agents/delete/{agent_id}` | Delete a custom agent. Default agents cannot be deleted. |
+| `POST` | `/admin/agents/{agent_id}/preview` | Create a temporary preview session to test an agent (see Admin — Agent Preview section). |
 
 ### POST /admin/agents
 ```json
@@ -112,7 +113,7 @@ All fields optional. Updatable: `username`, `email`, `password`, `role` (`Admin`
 }
 ```
 
-### PATCH /admin/agents/{agent_id}
+### POST /admin/agents/update/{agent_id}
 All fields optional. Send only what you want to change.
 ```json
 {
@@ -140,8 +141,8 @@ All fields optional. Send only what you want to change.
 | `GET` | `/admin/models` | List all configured models (api_key is masked). |
 | `GET` | `/admin/models/{model_id}` | Get a single configured model. |
 | `POST` | `/admin/models` | Add a new model configuration with an API key. |
-| `PATCH` | `/admin/models/{model_id}` | Update a model configuration. |
-| `DELETE` | `/admin/models/{model_id}` | Delete a model. Default model (`ilmu-glm-5.1`) cannot be deleted. Auto-disables any custom agents that used this model. |
+| `POST` | `/admin/models/update/{model_id}` | Update a model configuration. |
+| `POST` | `/admin/models/delete/{model_id}` | Delete a model. Default model (`ilmu-glm-5.1`) cannot be deleted. Auto-disables any custom agents that used this model. |
 
 ### POST /admin/models
 ```json
@@ -154,7 +155,7 @@ All fields optional. Send only what you want to change.
 }
 ```
 
-### DELETE /admin/models/{model_id} — Response when agents are affected
+### POST /admin/models/delete/{model_id} — Response when agents are affected
 ```json
 {
   "ok": true,
@@ -166,6 +167,25 @@ All fields optional. Send only what you want to change.
 
 ---
 
+## Admin — Settings
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/admin/settings` | List all system settings. |
+| `GET` | `/admin/settings/{setting_key}` | Get a single setting by key. |
+| `POST` | `/admin/settings/update/{setting_key}` | Create or update a system setting. |
+
+### POST /admin/settings/update/{setting_key}
+```json
+{
+  "setting_value": 5000,
+  "price": "RM 9.90 (optional display string)"
+}
+```
+Common keys: `token_pack` (tokens per purchase + display price).
+
+---
+
 ## Client — Projects
 
 | Method | Path | Purpose |
@@ -173,8 +193,8 @@ All fields optional. Send only what you want to change.
 | `POST` | `/client/projects` | Create a new project for a user. |
 | `GET` | `/client/projects/user/{user_id}` | List all projects belonging to a user. |
 | `GET` | `/client/projects/{project_id}` | Get a single project. |
-| `PATCH` | `/client/projects/{project_id}` | Update project details. |
-| `DELETE` | `/client/projects/{project_id}` | Delete a project (cascades to all sessions, prompts, and dashboard). |
+| `POST` | `/client/projects/update/{project_id}` | Update project details. |
+| `POST` | `/client/projects/delete/{project_id}` | Delete a project (cascades to all sessions, prompts, and dashboard). |
 
 ### POST /client/projects
 ```json
@@ -191,7 +211,7 @@ All fields optional. Send only what you want to change.
 }
 ```
 
-### PATCH /client/projects/{project_id}
+### POST /client/projects/update/{project_id}
 All fields optional. Send only what changed.
 ```json
 {
@@ -211,7 +231,7 @@ All fields optional. Send only what changed.
 | `POST` | `/client/sessions` | Open a new session with an agent inside a project. |
 | `GET` | `/client/sessions/user/{user_id}` | List all sessions for a user across all projects. |
 | `GET` | `/client/sessions/{session_id}` | Get a session with its full message history. |
-| `DELETE` | `/client/sessions/{session_id}` | Delete a session and all its messages. |
+| `POST` | `/client/sessions/delete/{session_id}` | Delete a session and all its messages. |
 | `GET` | `/client/sessions/switch/{project_id}/{agent_id}` | List all sessions for a specific project + agent pair (for session switcher UI). Returns newest first. |
 
 ### POST /client/sessions
@@ -233,7 +253,7 @@ All fields optional. Send only what changed.
     "agent_name": "string",
     "project_name": "string",
     "business_name": "string",
-    ...
+    "...": "..."
   },
   "history": [
     { "prompt_id": "uuid", "content": "string", "content_type": "prompt | reply", "timestamp": "..." }
@@ -248,7 +268,7 @@ All fields optional. Send only what changed.
 | Method | Path | Purpose |
 |--------|------|---------|
 | `POST` | `/client/sessions/{session_id}/chat` | Send a message to the agent. Returns the agent's reply. Saves both sides to history. |
-| `POST` | `/client/sessions/{session_id}/upload-chat` | Upload a PDF or CSV, extract its content via Gemini, and send it to the agent in one call. |
+| `POST` | `/client/sessions/{session_id}/upload-chat` | Upload a PDF or CSV — file content is extracted via Gemini and added to chat history as a user message. Follow up with normal `/chat` calls. |
 | `POST` | `/client/sessions/{session_id}/generate` | Generate a downloadable PDF, PPT, or CSV report using the agent's expertise and project context. |
 
 ### POST /client/sessions/{session_id}/chat
@@ -260,9 +280,11 @@ Returns: `{ "reply": "string" }`
 ### POST /client/sessions/{session_id}/upload-chat
 Form-data (multipart):
 - `file`: PDF or CSV file (max 20 MB)
-- `message`: string (optional, defaults to *"Analyse this file and provide business insights."*)
+- `message`: string (optional — prepended to the file content in history)
 
-Returns: `{ "filename": "...", "extracted_summary": "...", "reply": "..." }`
+Returns: `{ "filename": "...", "extracted_summary": "...", "message": "File added to conversation. You can now ask questions about it." }`
+
+> The file content is stored in session history as a user message. No agent reply is returned here — send follow-up questions via `POST /client/sessions/{session_id}/chat` as normal.
 
 ### POST /client/sessions/{session_id}/generate
 ```json
@@ -283,8 +305,8 @@ References are scoped to **user + agent** (not per session), so they are shared 
 |--------|------|---------|
 | `POST` | `/client/references` | Add a reference fact that the agent will draw on in all future sessions. |
 | `GET` | `/client/references/user/{user_id}/agent/{agent_id}` | List all references for a user + agent pair. |
-| `PATCH` | `/client/references/{reference_id}` | Edit the text of an existing reference. |
-| `DELETE` | `/client/references/{reference_id}?user_id={user_id}` | Remove a reference. |
+| `POST` | `/client/references/update/{reference_id}` | Edit the text of an existing reference. |
+| `POST` | `/client/references/delete/{reference_id}?user_id={user_id}` | Remove a reference. |
 
 ### POST /client/references
 ```json
@@ -295,7 +317,7 @@ References are scoped to **user + agent** (not per session), so they are shared 
 }
 ```
 
-### PATCH /client/references/{reference_id}
+### POST /client/references/update/{reference_id}
 ```json
 {
   "user_id": "string",
@@ -314,6 +336,7 @@ Each project has one dashboard. It is auto-created on first `GET`.
 | `GET` | `/client/dashboard/{project_id}` | Get the dashboard for a project including all pinned content. Auto-creates dashboard if it doesn't exist yet. |
 | `POST` | `/client/dashboard/{project_id}/add` | Pin an agent reply to the dashboard. |
 | `POST` | `/client/dashboard/content/{content_id}/update` | Edit the text of a pinned dashboard item. |
+| `POST` | `/client/dashboard/content/{content_id}/reorder` | Move a pinned item to a new position. Automatically shifts neighbours. |
 | `POST` | `/client/dashboard/content/{content_id}/delete` | Remove a pinned item from the dashboard. |
 
 ### GET /client/dashboard/{project_id} — Response shape
@@ -348,6 +371,12 @@ Each project has one dashboard. It is auto-created on first `GET`.
 { "content": "string" }
 ```
 
+### POST /client/dashboard/content/{content_id}/reorder
+```json
+{ "new_index": 1 }
+```
+Moves the item to the new position (1-based). Automatically shifts all neighbours. Safe to specify any index — it will be clamped to valid range.
+
 ---
 
 ## Client — Run Agent (one-shot, no session)
@@ -369,6 +398,86 @@ Each project has one dashboard. It is auto-created on first `GET`.
 
 ---
 
+## Client — Purchase
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/client/purchase` | Purchase additional tokens (MVP—no payment gateway). |
+| `GET` | `/client/purchase/history/{user_id}` | Get all purchases made by a user. |
+| `GET` | `/client/purchase/token-status/{user_id}` | Get current token breakdown: used, available, remaining, refresh time. |
+
+### POST /client/purchase
+```json
+{
+  "user_id": "string",
+  "purchase_type": "token"
+}
+```
+Returns: `{ "purchase": {...}, "tokens_added": 5000, "purchased_token_remaining": 7500 }`
+
+### GET /client/purchase/token-status/{user_id} — Response
+```json
+{
+  "user_id": "string",
+  "token_used": 1200,
+  "max_token": 50000,
+  "purchased_token_remaining": 5000,
+  "total_available": 55000,
+  "tokens_remaining": 53800,
+  "token_refresh_at": "2026-04-25T17:09:21Z"
+}
+```
+
+---
+
+## Chat — User Messaging
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/chat/users/search?other_user_name={name}&current_user_id={id}` | Search for users to start a conversation with. |
+| `GET` | `/chat/conversations?current_user_id={id}` | List all conversations for the current user. |
+| `POST` | `/chat/conversations?current_user_id={id}&target_user_id={id}` | Open or retrieve a conversation with another user. |
+| `GET` | `/chat/conversations/{conversation_id}/messages` | Get paginated messages for a conversation. |
+| `POST` | `/chat/conversations/{conversation_id}/upload` | Upload a file attachment (image, PDF, CSV, PPTX, TXT, DOCX) into a conversation. |
+| `POST` | `/chat/conversations/{conversation_id}/read` | Mark all messages in a conversation as read. |
+| `POST` | `/chat/messages/delete/{message_id}` | Soft-delete a message (only the sender can delete their own). |
+| `GET` | `/chat/attachments/{attachment_id}/download` | Download a file attachment. |
+| `WS` | `/chat/chat/ws/{user_id}` | WebSocket connection for real-time messaging. |
+
+### POST /chat/conversations/{conversation_id}/upload
+Form-data: `file` (multipart), query param `current_user_id`  
+Allowed types: images, CSV, PDF, PPTX, TXT, DOCX  
+Returns message payload including `attachment.attachment_id`.
+
+### WebSocket actions
+Send JSON with an `action` field:
+```json
+{ "action": "send_message", "conversation_id": "uuid", "content": "string", "reply_to_id": "uuid (optional)" }
+{ "action": "typing", "conversation_id": "uuid", "recipient_id": "string" }
+{ "action": "mark_read", "conversation_id": "uuid" }
+```
+
+---
+
+## Admin — Agent Preview (Testing)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/admin/agents/{agent_id}/preview` | Create a temporary preview session to test an agent as a client would. |
+
+### POST /admin/agents/{agent_id}/preview
+```json
+{
+  "user_id": "string (admin user ID)",
+  "business_name": "string",
+  "business_type": "string",
+  "business_context": "string (optional)"
+}
+```
+Returns: `{ "session_id": "uuid", ...session_details }`
+
+---
+
 ## Common Response Codes
 
 | Code | Meaning |
@@ -376,9 +485,10 @@ Each project has one dashboard. It is auto-created on first `GET`.
 | `200` | OK |
 | `201` | Created |
 | `400` | Bad request / validation error |
+| `402` | Token limit reached — purchase more tokens |
 | `403` | Forbidden (e.g. deleting a default agent, enabling agent with no model) |
 | `404` | Resource not found |
 | `413` | File too large (upload-chat, max 20 MB) |
-| `415` | Unsupported file type (only PDF and CSV accepted) |
+| `415` | Unsupported file type (only PDF and CSV accepted for upload-chat) |
 | `422` | Unprocessable — LLM did not return valid JSON (retry generate) |
 | `500` | Internal server error |

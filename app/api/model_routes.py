@@ -77,14 +77,14 @@ def create_model_route(data: ModelCreateRequest):
     return create_model(data.model_dump())
 
 
-@router.patch("/{model_id}")
+@router.post("/update/{model_id}")
 def update_model_route(model_id: str, data: ModelUpdateRequest):
     if not get_model(model_id):
         raise HTTPException(status_code=404, detail="Model not found")
     return update_model(model_id, data.model_dump(exclude_unset=True))
 
 
-@router.delete("/{model_id}")
+@router.post("/delete/{model_id}")
 def delete_model_route(model_id: str):
     success, err, disabled_agents = delete_model(model_id)
     if err == "not_found":
