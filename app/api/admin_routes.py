@@ -14,6 +14,12 @@ def list_agents():
     return get_all_agents()
 
 
+@router.get("/available-models")
+def list_available_models():
+    """Returns all configured models for the model_id dropdown when creating an agent."""
+    return get_all_models()
+
+
 @router.get("/{agent_id}")
 def get_agent_detail(agent_id: str):
     agent = get_agent(agent_id)
@@ -37,12 +43,6 @@ def update_agent_route(agent_id: str, data: AgentUpdateRequest):
         )
 
     return update_agent(agent_id, updates)
-
-
-@router.get("/available-models")
-def list_available_models():
-    """Returns all configured models for the model_id dropdown when creating an agent."""
-    return get_all_models()
 
 
 @router.post("")
