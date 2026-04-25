@@ -16,6 +16,10 @@ from app.services.reference_service import init_reference_table
 from app.api.chat_routes import router as chat_router
 from app.core.config import SECRET_KEY
 from app.api.crud_routes import router as crud_routes
+from app.api.dashboard_routes import router as dashboard_router
+from app.api.model_routes import router as model_router
+from app.api.file_routes import router as file_router
+from app.api.generation_routes import router as generation_router
 
 os.environ['AUTHLIB_INSECURE_TRANSPORT'] = 'true'
 
@@ -47,9 +51,13 @@ app.add_middleware(
 
 app.include_router(router)
 app.include_router(auth_router)
-app.include_router(agent_router, prefix="/client-dashboard")
-app.include_router(project_router, prefix="/client-dashboard")
-app.include_router(reference_router, prefix="/client-dashboard")
-app.include_router(admin_router, prefix="/admin-dashboard")
+app.include_router(agent_router, prefix="/client")
+app.include_router(project_router, prefix="/client")
+app.include_router(reference_router, prefix="/client")
+app.include_router(dashboard_router, prefix="/client")
+app.include_router(file_router, prefix="/client")
+app.include_router(generation_router, prefix="/client")
+app.include_router(admin_router, prefix="/admin")
+app.include_router(model_router, prefix="/admin")
 app.include_router(crud_routes)
 app.include_router(chat_router)

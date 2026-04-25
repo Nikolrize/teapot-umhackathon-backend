@@ -17,12 +17,12 @@ def create_reference(data: ReferenceCreateRequest):
     return add_reference(data.user_id, session["agent_id"], data.session_id, data.content)
 
 
-@router.get("/user/{user_id}/agent/{agent_slug}")
-def list_references(user_id: int, agent_slug: str):
-    agent = get_agent(agent_slug)
+@router.get("/user/{user_id}/agent/{agent_id}")
+def list_references(user_id: str, agent_id: str):
+    agent = get_agent(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    return get_user_agent_references(user_id, agent["id"])
+    return get_user_agent_references(user_id, agent_id)
 
 
 @router.patch("/{reference_id}")
@@ -34,7 +34,7 @@ def edit_reference(reference_id: str, data: ReferenceUpdateRequest):
 
 
 @router.delete("/{reference_id}")
-def remove_reference(reference_id: str, user_id: int = Query(...)):
+def remove_reference(reference_id: str, user_id: str = Query(...)):
     if not delete_reference(reference_id, user_id):
         raise HTTPException(status_code=404, detail="Reference not found")
     return {"message": "Reference deleted"}

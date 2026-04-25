@@ -6,15 +6,15 @@ from app.services.glm_service import call_glm
 router = APIRouter(prefix="/agents")
 
 
-@router.post("/{slug}")
-def run_agent(slug: str, data: WorkspaceContext):
-    agent = get_agent(slug)
+@router.post("/{agent_id}")
+def run_agent(agent_id: str, data: WorkspaceContext):
+    agent = get_agent(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    if agent["is_disabled"]:
-        raise HTTPException(status_code=403, detail=f"Agent '{agent['name']}' is currently disabled")
+    if agent["isdisable"]:
+        raise HTTPException(status_code=403, detail=f"Agent '{agent['agent_name']}' is currently disabled")
     context = {
         "task": agent["task"],
         "business": data.model_dump(),
     }
-    return call_glm(agent["max_tokens"], agent["requirements"], context, agent["temperature"], agent["top_p"])
+    return call_glm(agent["max_token"], agent["requirements"], context, agent["temperature"], agent["top_p"])
