@@ -19,6 +19,10 @@ class User(Base):
     is_inactive = Column(Boolean, nullable=False, default=False)
     auth_provider = Column(Text, nullable=True)
     provider_id = Column(Text, nullable=True)
+    token_used = Column(Integer, default=0)
+    max_token = Column(Integer, default=10000)
+    token_refresh_at = Column(DateTime(timezone=True))
+    purchased_token_remaining = Column(Integer, default=0)
     
 class Conversation(Base):
     __tablename__ = "conversations"
