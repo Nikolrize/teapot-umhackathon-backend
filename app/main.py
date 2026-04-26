@@ -39,6 +39,7 @@ def _parse_allowed_origins() -> list[str]:
     This avoids browser CORS failures during local frontend development.
     """
     default_origins = [
+        "https://teapot-umhackathon-frontend.vercel.app",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ]
